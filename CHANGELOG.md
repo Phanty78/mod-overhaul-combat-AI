@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.4.0 - 2026-10-25
+
+### Ajouté
+
+- Protection des alliés pour les créatures éligibles et opt-in, évaluée après la
+  fuite et avant l'appel à l'aide. Au plus une action tactique par décision :
+  `TryRetreat`, puis `TryProtectAlly`, puis `TryCallForHelp`.
+- Branche soigneur : une créature dont `m_spells` contient un sort positif avec
+  `SPELL_EFFECT_HEAL` scanne les alliés dans un rayon fixe de 20 yards (vivant,
+  ami, différent du soigneur, même carte, même zone, à portée, ligne de vue, vie
+  strictement inférieure à 80 %) et retient celui dont la vie est la plus basse.
+  Le cast exige un cooldown de sort à 0, `CheckTarget` égal à `SPELL_CAST_OK`,
+  la portée `GetMaxRange(true, créature)` (repli 40 yards) et la ligne de vue. Le
+  soin est lancé par `CastSpell(allié, sort, false)` et arme un cooldown de
+  1000 ms. `protectAllyAttempts` et `protectAllyHeals` sont incrémentés.
+- Branche non-soigneur : recherche d'un allié soigneur ami, vivant, engagé, dans
+  un rayon de 20 yards, même carte et même zone, avec ligne de vue et vie
+  inférieure ou égale à 60 %. L'attaquant est la victime du soigneur, à défaut la
+  première cible vivante et en ligne de `GetSortedThreatList()`. Il doit être
+  vivant, hostile à l'initiateur et à portée de 20 yards. L'initiateur reçoit un
+  `MovePoint` vers le point milieu soigneur/attaquant (identifiant unique
+  `0x4D434150`) puis `EngageWithTarget(attaquant)`, sans `AttackStart` ni
+  changement de victime. Cooldown de 5000 ms ; `protectAllyAttempts` et
+  `protectAllyIntercepts` sont incrémentés.
+- `CombatAI.ProtectAlly.Enable` devient actif : à `1`, les deux branches sont
+  disponibles ; à `0`, aucune protection n'est exécutée. Le rayon (20 yards),
+  les seuils (80 %, 60 %) et les cooldowns (1 s, 5 s) sont des constantes de
+  code, pas des clés. Le module conserve ses 23 clés de configuration.
+- Nouveaux compteurs : `protectAllyAttempts`, `protectAllyHeals`,
+  `protectAllyIntercepts` et `protectAllyNoTarget`.
+- Diagnostics `scripts.ai` sous `CombatAI.Debug` : soin d'un allié avec le sort
+  retenu et interception d'un attaquant pour un soigneur en danger.
+- Aucun appel direct à `AddThreat`, `ModifyThreat` ou `ScaleThreat` ; aucun
+  changement de cible ; aucun sort inventé, appris ou ajouté ; pas de
+  `GetCreatureAI`.
+
+### Notes
+
+- Test de fumée local sur deux scénarios (soin d'un allié à 29,069767 % et
+  interception d'un mélé vers un soigneur à 50 %) : `protectAllyAttempts=2`
+  (`protectAllyHeals=1`, `protectAllyIntercepts=1`), allié remonté à 100 % à
+  T+7 s, distance de surface mélé-soigneur 7 → 0, `meleeType=0`
+  (`IDLE_MOTION_TYPE`), aucune erreur. `protectAllyNoTarget` passe de 6 à 34
+  entre T+3 s et T+7 s pour les créatures éligibles sans candidat ; c'est
+  attendu. SmartAI peut aussi soigner : `protectAllyHeals` prouve le cast du
+  module, mais la remontée à 100 % n'est pas attribuée exclusivement au module.
+  Les tests joueurs solo/duo/groupe, les immunités, les contrôles de foule, les
+  compositions de menace, plusieurs soigneurs simultanés, les obstacles, les
+  durées de plusieurs minutes et la charge ne sont pas validés ; les constantes
+  sont fixes. Protocole et journal dans `docs/phase-4-test.md`.
+- Aucune modification du core, aucune mise à jour SQL. Aucune clé de
+  configuration ajoutée ou supprimée.
+
 ## 0.3.0 - 2026-10-25
 
 ### Ajouté

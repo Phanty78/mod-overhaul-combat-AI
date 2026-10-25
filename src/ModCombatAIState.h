@@ -40,6 +40,10 @@ struct ModCombatAICounters
     uint64 retreatFallbacks = 0;
     uint64 retreatStuck = 0;
     uint64 retreatCompleted = 0;
+    uint64 protectAllyAttempts = 0;
+    uint64 protectAllyHeals = 0;
+    uint64 protectAllyIntercepts = 0;
+    uint64 protectAllyNoTarget = 0;
 };
 
 class ModCombatAIState

@@ -2,6 +2,7 @@
 #include "ModCombatAICallForHelp.h"
 #include "ModCombatAIConfig.h"
 #include "ModCombatAIEligibility.h"
+#include "ModCombatAIProtectAlly.h"
 #include "ModCombatAIRetreat.h"
 #include "ModCombatAIState.h"
 #include "Creature.h"
@@ -60,9 +61,11 @@ void ModCombatAICreatureScript::OnAllCreatureUpdate(Creature* creature, uint32 d
     context->lastDecisionMs = now;
     ++state.Counters().decisionsEvaluated;
 
-    // Phase 3: retreat first, then bounded call for help, so at most one action per decision.
-    bool const retreatHandled = mod_combat_ai::TryRetreat(creature, *context, now);
-    if (!retreatHandled)
+    // Phase 4: retreat, then protect ally, then bounded call for help, so at most one action per decision.
+    bool handled = mod_combat_ai::TryRetreat(creature, *context, now);
+    if (!handled)
+        handled = mod_combat_ai::TryProtectAlly(creature, *context, now);
+    if (!handled)
         mod_combat_ai::TryCallForHelp(creature, *context, now);
 
     if (g_ModCombatAIConfig.Debug())
