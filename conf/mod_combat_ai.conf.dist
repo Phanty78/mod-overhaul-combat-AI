@@ -105,6 +105,9 @@ CombatAI.Retreat.Radius = 15
 # 1 = la créature peut intervenir pour défendre un allié attaqué
 CombatAI.ProtectAlly.Enable = 1
 
+# 1 = un lanceur à distance trop proche de sa cible peut se repositionner
+CombatAI.Reposition.Enable = 1
+
 # ----------------------------------------------------------
 # Charge et diagnostic
 # ----------------------------------------------------------

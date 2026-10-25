@@ -1,9 +1,7 @@
 #include "ModCombatAICreature.h"
-#include "ModCombatAICallForHelp.h"
 #include "ModCombatAIConfig.h"
+#include "ModCombatAIDecisionEngine.h"
 #include "ModCombatAIEligibility.h"
-#include "ModCombatAIProtectAlly.h"
-#include "ModCombatAIRetreat.h"
 #include "ModCombatAIState.h"
 #include "Creature.h"
 #include "Log.h"
@@ -61,12 +59,8 @@ void ModCombatAICreatureScript::OnAllCreatureUpdate(Creature* creature, uint32 d
     context->lastDecisionMs = now;
     ++state.Counters().decisionsEvaluated;
 
-    // Phase 4: retreat, then protect ally, then bounded call for help, so at most one action per decision.
-    bool handled = mod_combat_ai::TryRetreat(creature, *context, now);
-    if (!handled)
-        handled = mod_combat_ai::TryProtectAlly(creature, *context, now);
-    if (!handled)
-        mod_combat_ai::TryCallForHelp(creature, *context, now);
+    // The decision engine scores the four tactics and executes at most one action.
+    ModCombatAIDecisionEngine::Instance().Decide(creature, *context, now);
 
     if (g_ModCombatAIConfig.Debug())
     {

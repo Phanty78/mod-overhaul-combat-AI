@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Common.h"
+#include "ModCombatAIGroupKey.h"
 
-#include <cstddef>
 #include <unordered_map>
 
 class Creature;
@@ -18,28 +18,12 @@ public:
     void Reset();
 
 private:
-    struct GroupKey
-    {
-        uint32 mapId = 0;
-        int32 cellX = 0;
-        int32 cellY = 0;
-
-        bool operator==(GroupKey const& other) const = default;
-    };
-
-    struct GroupKeyHash
-    {
-        std::size_t operator()(GroupKey const& key) const;
-    };
-
     struct GroupState
     {
         uint32 cooldownEnd = 0;
     };
 
-    static GroupKey MakeKey(Creature* creature);
-
-    std::unordered_map<GroupKey, GroupState, GroupKeyHash> _groups;
+    std::unordered_map<ModCombatAIGroupKey, GroupState, ModCombatAIGroupKeyHash> _groups;
     uint32 _lastPruneMs = 0;
 };
 

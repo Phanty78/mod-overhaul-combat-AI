@@ -1,5 +1,7 @@
 #include "ModCombatAIWorld.h"
 #include "ModCombatAIConfig.h"
+#include "ModCombatAICoordinator.h"
+#include "ModCombatAIDiagnostics.h"
 #include "ModCombatAIGroupCoordinator.h"
 #include "ModCombatAIState.h"
 #include "Log.h"
@@ -13,6 +15,8 @@ void ModCombatAIWorldScript::OnAfterConfigLoad(bool reload)
 {
     g_ModCombatAIConfig.Initialize(reload);
     ModCombatAIState::Instance().ResetOnConfigReload();
+    g_ModCombatAICoordinator.Reset();
+    g_ModCombatAIDiagnostics.Reset();
     g_ModCombatAIGroupCoordinator.Reset();
 
     LOG_INFO("server.loading", "mod-combat-ai: {} (call for help {})", g_ModCombatAIConfig.Enabled() ? "enabled" : "disabled",
@@ -23,6 +27,10 @@ void ModCombatAIWorldScript::OnUpdate(uint32 diff)
 {
     (void)diff;
 
+    uint32 const now = getMSTime();
+
     ModCombatAIState::Instance().BeginWorldTick(g_ModCombatAIConfig.MaxDecisionsPerTick());
-    g_ModCombatAIGroupCoordinator.Prune(getMSTime(), g_ModCombatAIConfig.CallForHelpCooldownMs());
+    g_ModCombatAICoordinator.Prune(now);
+    g_ModCombatAIDiagnostics.LogSummary(now, g_ModCombatAIConfig.Debug());
+    g_ModCombatAIGroupCoordinator.Prune(now, g_ModCombatAIConfig.CallForHelpCooldownMs());
 }

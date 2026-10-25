@@ -1,5 +1,78 @@
 # Changelog
 
+## 0.5.0 - 2026-10-25
+
+### Ajouté
+
+- Moteur de décision scoré pour les créatures éligibles et opt-in. À chaque
+  décision, les quatre tactiques sont évaluées comme candidats : fuite
+  `100 + (seuil - vie) * 2` lorsque la vie est inférieure ou égale au seuil,
+  protection `60`, appel à l'aide `40` et repositionnement `30`.
+- `IndividualIntelligence` multiplie les scores de fuite et de repositionnement
+  par `(0.5 + valeur)` ; `GroupIntelligence` multiplie ceux de protection et
+  d'appel par `(0.5 + valeur)`. Chaque candidat reçoit une variation aléatoire
+  bornée de ±10 %. Les candidats sont triés par score décroissant et la première
+  action réussie consomme la décision ; une tentative échouée passe au candidat
+  suivant. Si aucun candidat n'agit, `decisionsNoAction` est incrémenté.
+- Une fuite en cours appelle le watchdog et consomme la décision sans compter de
+  nouvelle action ; les autres tactiques ne sont pas tentées.
+- Coordinateur par groupe : clé `mapId` + cellule de 40 yards, fenêtre de 5 s.
+  Seuls l'appel à l'aide réussi et l'interception de protection réussie
+  sont des actions coopératives, plafonnées à
+  `1 + uint32(GroupIntelligence * 2)`. Les soins ne sont pas limités par le
+  coordinateur ; la fuite et le repositionnement ne passent jamais par lui.
+  L'appel est filtré dans le moteur ; l'interception se filtre dans
+  `TryProtectAlly`.
+- Nouvelle clé `CombatAI.Reposition.Enable` (bool, défaut `1`). Un lanceur dont un
+  sort de `m_spells` atteint au moins 25 yards et dont la cible vivante est à
+  moins de 5 yards recule de 15 yards à l'opposé de cette cible via `MovePoint`
+  (identifiant `0x4D434152`), avec un cooldown de 5 s par créature. Le
+  repositionnement est ignoré pendant un cast, une fuite suivie ou un générateur
+  `POINT_MOTION_TYPE`, `FLEEING_MOTION_TYPE` ou `TIMED_FLEEING_MOTION_TYPE` ; il
+  ne change ni cible ni menace.
+- Nouveaux compteurs : `repositionAttempts`, `actionsRetreat`,
+  `actionsProtectAlly`, `actionsCallForHelp`, `actionsReposition` et
+  `decisionsNoAction`.
+- Diagnostic `scripts.ai` de la tactique retenue avec son score sous
+  `CombatAI.Debug`, et résumé `LOG_INFO` des compteurs au plus toutes les 60 s.
+- Clé de groupe partagée extraite dans `ModCombatAIGroupKey.h/.cpp` ; le
+  comportement du cooldown de groupe de l'appel à l'aide est inchangé.
+
+### Modifié
+
+- `CombatAI.IndividualIntelligence` et `CombatAI.GroupIntelligence` deviennent
+  actives : elles pondèrent désormais les scores et le plafond coopératif.
+- Le module compte **24 clés de configuration** ; `CombatAI.Reposition.Enable`
+  s'ajoute aux 23 clés existantes.
+- `.reload config` réinitialise aussi le coordinateur et l'horodatage du résumé
+  de diagnostic ; les compteurs cumulés restent en mémoire.
+
+### Notes
+
+- Test de fumée local sur quatre scénarios (A fuite, B protection, C appel,
+  D repositionnement) :
+
+  ```text
+  mod-combat-ai: enabled (call for help enabled)
+  COMBATAI P5 SMOKE: spawned A=(830,831,832) B=(833,834,835) C=(853,854,855) D=(856,857)
+  COMBATAI P5 SMOKE T+4s: retreatActions=2 protectActions=2 callActions=1 repositionActions=1 noAction=34 | A_distAlly=0 B_allyHealth=29.069767 C_allyEngaged=true D_distEnemy=15 D_type=0
+  COMBATAI P5 SMOKE T+8s: retreatActions=2 protectActions=2 callActions=1 repositionActions=2 noAction=80 | A_distAlly=0 B_allyHealth=100 C_allyEngaged=true D_distEnemy=15 D_type=0
+  ```
+
+  Les quatre tactiques sont sélectionnées. A a rejoint son allié
+  (`A_distAlly=0`), B est passé de `29.069767` % à `100` %, l'allié de C est
+  engagé (`C_allyEngaged=true`) et D est passé de 3 à 15 yards avec `D_type=0`
+  (`IDLE_MOTION_TYPE`). `retreatActions` et `protectActions` sont stables entre
+  T+4 s et T+8 s ; `repositionActions` passe de 1 à 2. Les compteurs sont agrégés
+  sur les quatre scénarios et ne permettent pas d'attribuer chaque action à un
+  scénario. Le watchdog de fuite n'ajoute pas de nouvelle action pendant un
+  déplacement en cours. Protocole et journal dans `docs/phase-5-test.md`.
+- Les scores et la variation ±10 % sont des heuristiques de départ, pas des
+  valeurs d'équilibrage validées. Les tests joueurs solo/duo/groupe, les tests de
+  charge et les autres types de créatures ne sont pas couverts.
+- Aucune modification du core, aucune mise à jour SQL. Aucun changement de cible
+  ni de menace artificielle ; les soins ne sont pas limités par le coordinateur.
+
 ## 0.4.0 - 2026-10-25
 
 ### Ajouté

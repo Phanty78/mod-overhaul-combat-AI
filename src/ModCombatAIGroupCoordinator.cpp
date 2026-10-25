@@ -1,18 +1,10 @@
 #include "ModCombatAIGroupCoordinator.h"
-#include "Creature.h"
 #include "Timer.h"
-
-#include <cmath>
-#include <functional>
 
 namespace
 {
-    // Side length of the square world cell that acts as a "group" for cooldown purposes.
-    constexpr float GroupCellSize = 40.0f;
     // Minimum spacing between two full sweeps of the group map.
     constexpr uint32 GroupPruneIntervalMs = 60000;
-    // Mixing constant from the golden ratio, as used by boost::hash_combine.
-    constexpr std::size_t HashMixConstant = 0x9e3779b9;
 }
 
 ModCombatAIGroupCoordinator g_ModCombatAIGroupCoordinator;
@@ -23,36 +15,12 @@ ModCombatAIGroupCoordinator& ModCombatAIGroupCoordinator::Instance()
     return instance;
 }
 
-ModCombatAIGroupCoordinator::GroupKey ModCombatAIGroupCoordinator::MakeKey(Creature* creature)
-{
-    GroupKey key;
-    key.mapId = creature->GetMapId();
-    key.cellX = int32(std::floor(creature->GetPositionX() / GroupCellSize));
-    key.cellY = int32(std::floor(creature->GetPositionY() / GroupCellSize));
-    return key;
-}
-
-std::size_t ModCombatAIGroupCoordinator::GroupKeyHash::operator()(GroupKey const& key) const
-{
-    std::size_t seed = std::hash<uint32>{}(key.mapId);
-
-    auto combine = [&seed](int32 value)
-    {
-        seed ^= std::hash<uint32>{}(uint32(value)) + HashMixConstant + (seed << 6) + (seed >> 2);
-    };
-
-    combine(key.cellX);
-    combine(key.cellY);
-
-    return seed;
-}
-
 bool ModCombatAIGroupCoordinator::CanCallForHelp(Creature* creature, uint32 now) const
 {
     if (!creature)
         return true;
 
-    auto it = _groups.find(MakeKey(creature));
+    auto it = _groups.find(MakeModCombatAIGroupKey(creature));
     if (it == _groups.end())
         return true;
 
@@ -66,7 +34,7 @@ void ModCombatAIGroupCoordinator::OnCallForHelp(Creature* creature, uint32 now, 
     if (!creature)
         return;
 
-    _groups[MakeKey(creature)].cooldownEnd = now + cooldownMs;
+    _groups[MakeModCombatAIGroupKey(creature)].cooldownEnd = now + cooldownMs;
 }
 
 void ModCombatAIGroupCoordinator::Prune(uint32 now, uint32 /*cooldownMs*/)

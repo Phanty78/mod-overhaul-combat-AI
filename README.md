@@ -1,6 +1,6 @@
 # mod-combat-ai
 
-**État : Phase 4 — protection des alliés (version 0.4.0). Les phases 1 à 3
+**État : Phase 5 — moteur de décision (version 0.5.0). Les phases 1 à 4
 restent la fondation.**
 
 Module AzerothCore pour WotLK 3.3.5a. Il ajoute une couche de décision de combat
@@ -15,8 +15,11 @@ plus proche par un déplacement natif, ou fuit brièvement à défaut d'allié. 
 Phase 4 ajoute la protection des alliés : un soigneur éligible soigne un allié
 blessé avec un sort de soin réellement présent dans sa liste de sorts, et un
 combattant non soigneur se porte vers le point milieu entre un soigneur allié en
-danger et son attaquant, en ajoutant une référence de combat à zéro menace. Au
-plus une action tactique est exécutée par décision.
+danger et son attaquant, en ajoutant une référence de combat à zéro menace. La
+Phase 5 ajoute le moteur de décision : les quatre tactiques sont notées, pondérées
+par `IndividualIntelligence` et `GroupIntelligence`, ordonnées par score, avec un
+coordinateur par groupe, des diagnostics périodiques et un repositionnement borné
+des lanceurs à distance. Au plus une action tactique est exécutée par décision.
 
 Le module est **désactivé par défaut** (`CombatAI.Enable = 0`) et fonctionne en
 **opt-in strict** (`CombatAI.OptInOnly = 1`). Avec la configuration livrée, aucune
@@ -68,12 +71,12 @@ Le rapport d'audit et les limitations détaillées sont dans
    les créatures éligibles de ces cartes : préférer `IncludeEntries` pour un
    déploiement progressif.
 
-Aucune mise à jour SQL n'est requise en Phase 4.
+Aucune mise à jour SQL n'est requise en Phase 5.
 
 ## Configuration
 
 Fichier : `env/dist/etc/modules/mod_combat_ai.conf` (`conf/mod_combat_ai.conf.dist`
-comme modèle). Les 23 clés sont rechargées par `.reload config` via
+comme modèle). Les 24 clés sont rechargées par `.reload config` via
 `WorldScript::OnAfterConfigLoad`.
 
 | Clé | Type | Défaut | Rôle et contrainte |
@@ -88,8 +91,8 @@ comme modèle). Les 23 clés sont rechargées par `.reload config` via
 | `CombatAI.ExcludeMaps` | string (CSV) | `""` | Cartes toujours refusées. L'exclusion est prioritaire sur l'inclusion. |
 | `CombatAI.DecisionIntervalMs` | uint32 | `1000` | Intervalle minimal entre deux décisions d'une même créature, en ms. Doit être `> 0`. |
 | `CombatAI.DecisionJitterMs` | uint32 | `250` | Jitter aléatoire ajouté à l'intervalle, en ms (`0` = aucun jitter), pour lisser la charge. |
-| `CombatAI.IndividualIntelligence` | float | `0.5` | Poids de décision individuelle, entre `0.0` et `1.0`. Stocké pour les phases ultérieures ; sans effet en Phase 4. |
-| `CombatAI.GroupIntelligence` | float | `0.5` | Poids de coordination de groupe, entre `0.0` et `1.0`. Stocké pour les phases ultérieures ; sans effet en Phase 4. |
+| `CombatAI.IndividualIntelligence` | float | `0.5` | Poids de décision individuelle, entre `0.0` et `1.0`. Multiplie les scores de fuite et de repositionnement par `(0.5 + valeur)`. À `0`, la tactique conserve la moitié de son score de base. |
+| `CombatAI.GroupIntelligence` | float | `0.5` | Poids de coordination de groupe, entre `0.0` et `1.0`. Multiplie les scores de protection et d'appel à l'aide par `(0.5 + valeur)` et fixe le plafond d'actions coopératives du coordinateur à `1 + uint32(valeur * 2)`. |
 | `CombatAI.CallForHelp.Enable` | bool | `1` | Active la tactique d'appel à l'aide de la Phase 2. À `0`, aucune tentative d'appel n'est faite. |
 | `CombatAI.CallForHelp.MaxAllies` | uint32 | `2` | Plafond d'alliés engagés par appel, entre `0` et `10`. À `0`, la tactique est court-circuitée : aucun scan et aucun allié engagé. |
 | `CombatAI.CallForHelp.Radius` | float | `15` | Rayon de recherche des alliés, en mètres. Doit être `> 0`. Utilisé avec les contrôles de zone, de distance et de ligne de vue. |
@@ -98,9 +101,10 @@ comme modèle). Les 23 clés sont rechargées par `.reload config` via
 | `CombatAI.Retreat.HealthThresholdPct` | uint32 | `20` | Seuil de vie en pourcentage, entre `1` et `100`. La fuite peut se déclencher lorsque la vie de la créature est inférieure ou égale à ce seuil. |
 | `CombatAI.Retreat.CooldownMs` | uint32 | `60000` | Cooldown par créature entre deux tentatives de fuite, en ms (`0` = pas de délai). |
 | `CombatAI.Retreat.Radius` | float | `15` | Rayon de recherche de l'allié destination, en mètres. Doit être `> 0`. L'allié le plus proche dans ce rayon, visible et dans la même zone, sert de destination. |
-| `CombatAI.ProtectAlly.Enable` | bool | `1` | Active la protection des alliés de la Phase 4. À `1`, un soigneur peut soigner un allié blessé et un non-soigneur peut intercepter l'attaquant d'un soigneur en danger. À `0`, aucune des deux branches n'est exécutée. Les seuils et cooldowns de ces branches sont des constantes de code, pas des clés. |
+| `CombatAI.ProtectAlly.Enable` | bool | `1` | Active la protection des alliés de la Phase 4. À `1`, un soigneur peut soigner un allié blessé et un non-soigneur peut intercepter l'attaquant d'un soigneur en danger. À `0`, aucune des deux branches n'est exécutée et le score de protection n'est pas candidat. Les seuils et cooldowns de ces branches sont des constantes de code, pas des clés. |
+| `CombatAI.Reposition.Enable` | bool | `1` | Active le repositionnement de la Phase 5. À `1`, un lanceur dont un sort atteint au moins 25 yards et dont la cible est à moins de 5 yards recule de 15 yards. À `0`, aucun repositionnement n'est tenté et le score correspondant n'est pas candidat. |
 | `CombatAI.MaxDecisionsPerTick` | uint32 | `64` | Budget global de décisions par tick du monde. Doit être `> 0`. Les décisions au-delà du budget sont différées. |
-| `CombatAI.Debug` | bool | `0` | Si `1`, journalise dans `scripts.ai` l'entrée en combat éligible, chaque décision évaluée, le résultat des tentatives d'appel à l'aide, les diagnostics de fuite et les soins/interceptions de la Phase 4. |
+| `CombatAI.Debug` | bool | `0` | Si `1`, journalise dans `scripts.ai` l'entrée en combat éligible, chaque décision évaluée, la tactique retenue et son score, le résultat des tentatives d'appel à l'aide, les diagnostics de fuite, de protection et de repositionnement, et un résumé des compteurs toutes les 60 s. |
 
 Les listes CSV ignorent les espaces autour des valeurs et les jetons vides, non
 numériques ou hors plage. Une valeur invalide pour une clé validée produit un
@@ -132,11 +136,12 @@ Le symbole loader `Addmod_combat_aiScripts()` enregistre trois scripts :
 - `OnCreatureAddWorld` est enregistré comme point d'ancrage du cycle de vie, sans
   logique.
 - `OnAfterConfigLoad` relit la configuration. Un `.reload config` applique les
-  nouvelles valeurs, vide les contextes en mémoire et remet à zéro les cooldowns
-  de groupe ; contextes et cooldowns sont recréés au fil des combats et des ticks
-  suivants.
-- `OnUpdate` réinitialise le budget global `MaxDecisionsPerTick` pour le tick et
-  élague périodiquement les cooldowns de groupe expirés.
+  nouvelles valeurs, vide les contextes en mémoire, remet à zéro les cooldowns de
+  groupe, le coordinateur coopératif et l'horodatage du résumé de diagnostic ;
+  contextes et cooldowns sont recréés au fil des combats et des ticks suivants.
+- `OnUpdate` réinitialise le budget global `MaxDecisionsPerTick` pour le tick,
+  élague périodiquement les cooldowns de groupe et les états inactifs du
+  coordinateur, et émet le résumé de diagnostic quand il est dû.
 
 ### Filtrage et limitation de charge
 
@@ -150,7 +155,7 @@ aléatoire dans `[0, DecisionJitterMs]`) est écoulé. Le budget
 `MaxDecisionsPerTick` est partagé par toutes les créatures pour un tick du monde :
 au-delà, la décision est comptée comme différée et retentée à l'intervalle suivant.
 Le budget s'applique avant la tactique : une décision différée ne tente aucune
-tactique, fuite, protection ou appel à l'aide.
+tactique (fuite, protection, appel à l'aide ou repositionnement).
 
 ### Journalisation et diagnostics
 
@@ -164,14 +169,22 @@ tactique, fuite, protection ou appel à l'aide.
   destination alliée retenue, absence d'allié avec repli, et expiration du
   déplacement faute de progression. La Phase 4 ajoute deux diagnostics de
   protection : soin d'un allié avec le sort retenu, et interception d'un
-  attaquant pour un soigneur en danger. Aucun journal n'est émis par allié.
+  attaquant pour un soigneur en danger. La Phase 5 ajoute le diagnostic de
+  sélection (tactique retenue et score) et celui du repositionnement. Aucun
+  journal n'est émis par allié.
+- Avec `CombatAI.Debug = 1`, un résumé `LOG_INFO("scripts.ai", ...)` est émis au
+  plus toutes les 60 s. Il contient les décisions évaluées, les décisions sans
+  action, les sélections par tactique, les décisions différées par le budget et
+  les contextes créés.
 - Compteurs en mémoire : `decisionsEvaluated`, `skippedNotEligible`,
   `skippedBudget`, `contextsCreated`, `callForHelpAttempts`,
   `callForHelpAlliesEngaged`, `callForHelpGroupSkipped`, `callForHelpNoAllies`,
   `retreatAttempts`, `retreatAllies`, `retreatFallbacks`, `retreatStuck`,
   `retreatCompleted`, `protectAllyAttempts`, `protectAllyHeals`,
-  `protectAllyIntercepts` et `protectAllyNoTarget`. `callForHelpAttempts` compte
-  les scans réellement exécutés, `callForHelpAlliesEngaged` les alliés engagés,
+  `protectAllyIntercepts`, `protectAllyNoTarget`, `repositionAttempts`,
+  `actionsRetreat`, `actionsProtectAlly`, `actionsCallForHelp`,
+  `actionsReposition` et `decisionsNoAction`. `callForHelpAttempts` compte les
+  scans réellement exécutés, `callForHelpAlliesEngaged` les alliés engagés,
   `callForHelpGroupSkipped` les tentatives bloquées par le cooldown de groupe et
   `callForHelpNoAllies` les scans sans allié qualifié. Côté fuite,
   `retreatAttempts` compte les tentatives réellement exécutées, `retreatAllies`
@@ -181,30 +194,39 @@ tactique, fuite, protection ou appel à l'aide.
   `protectAllyAttempts` compte les actions réellement exécutées (un soin ou une
   interception), `protectAllyHeals` les soins lancés, `protectAllyIntercepts` les
   interceptions démarrées et `protectAllyNoTarget` les décisions arrivées au scan
-  sans allié, soigneur ou attaquant qualifié, ou sans sort de soin lançable. Le
-  module n'expose ni commande console ni export périodique de ces compteurs.
+  sans allié, soigneur ou attaquant qualifié, ou sans sort de soin lançable.
+  `repositionAttempts` compte les `MovePoint` de recul émis. Les compteurs
+  `actionsRetreat`, `actionsProtectAlly`, `actionsCallForHelp` et
+  `actionsReposition` comptent les sélections réussies du moteur de décision ;
+  `decisionsNoAction` compte les décisions arrivées au calcul des candidats pour
+  lesquelles aucun candidat n'a agi ; une fuite en cours est traitée avant ce
+  calcul et n'incrémente pas ce compteur. Une même créature peut incrémenter
+  plusieurs fois un compteur `actions*` :
+  ces compteurs ne mesurent pas des créatures distinctes. Le module n'expose ni
+  commande console ni export périodique de ces compteurs.
 
-### Ce qui n'est pas fait en Phase 4
+### Ce qui n'est pas fait en Phase 5
 
-À l'issue de la Phase 4, le module implémente l'appel à l'aide, la fuite et la
-protection des alliés. Le module ne change pas la cible de l'initiateur :
-l'interception ajoute une référence de combat à zéro menace via
-`EngageWithTarget`, sans `AttackStart` ni remplacement de la victime. Le soin ne
-sélectionne que des sorts positifs `SPELL_EFFECT_HEAL` déjà présents dans
-`m_spells` ; aucun sort n'est inventé, appris ou ajouté à la créature. La fuite
-déplace la créature avec les générateurs natifs `MovePoint` (vers un allié) et
-`MoveFleeing` (repli sans allié), et l'interception utilise `MovePoint` vers le
-point milieu soigneur/attaquant, sans remplacer l'IA. Le repositionnement et le
-moteur de décision fondé sur `IndividualIntelligence` et `GroupIntelligence`
-restent des phases ultérieures. Les clés `IndividualIntelligence` et
-`GroupIntelligence` sont lues et conservées pour ces phases.
+À l'issue de la Phase 5, le module implémente l'appel à l'aide, la fuite, la
+protection des alliés et le repositionnement, sélectionnés par le moteur de
+décision. Le module ne change pas la cible de l'initiateur : l'interception ajoute
+une référence de combat à zéro menace via `EngageWithTarget`, sans `AttackStart`
+ni remplacement de la victime ; le repositionnement ne touche ni à la cible ni à
+la menace. Le soin ne sélectionne que des sorts positifs `SPELL_EFFECT_HEAL` déjà
+présents dans `m_spells` ; aucun sort n'est inventé, appris ou ajouté à la
+créature. La fuite déplace la créature avec les générateurs natifs `MovePoint`
+(vers un allié) et `MoveFleeing` (repli sans allié) ; l'interception et le
+repositionnement utilisent `MovePoint`, sans remplacer l'IA. Les scores, les
+multiplicateurs et les constantes de repositionnement sont des heuristiques de
+départ, pas des valeurs d'équilibrage. La généralisation à d'autres types de
+créatures, les benchmarks de charge et le réglage fin des scores restent des
+travaux ultérieurs (Phase 6).
 
 ## Phase 2 — appel à l'aide
 
 La Phase 2 ajoute une première tactique. Au plus une action tactique est exécutée
-par décision, et les tactiques des phases 3 et 4 sont prioritaires sur l'appel à
-l'aide : l'ordre est fuite, protection des alliés, puis appel (voir les sections
-Phase 3 et Phase 4).
+par décision. Depuis la Phase 5, l'ordre d'évaluation n'est plus fixe : les
+quatre tactiques sont ordonnées par score (voir la section Phase 5).
 
 ### Déclenchement
 
@@ -248,8 +270,9 @@ Phase 3 et Phase 4).
 
 ## Phase 3 — fuite
 
-La Phase 3 ajoute la fuite bornée. Elle est évaluée en premier et consomme la
-décision lorsqu'elle démarre ou lorsqu'un déplacement de fuite est encore actif.
+La Phase 3 ajoute la fuite bornée. Depuis la Phase 5, la fuite est un candidat
+noté parmi les quatre ; lorsqu'elle démarre ou qu'un déplacement de fuite est
+encore actif, elle consomme la décision.
 
 ### Déclenchement
 
@@ -306,14 +329,15 @@ décision lorsqu'elle démarre ou lorsqu'un déplacement de fuite est encore act
 - Si le générateur disparaît (fin, remplacement par l'IA native), `moduleMoving`
   retombe à `false` et `retreatCompleted` est incrémenté.
 - Tant que `moduleMoving` est vrai, la fuite consomme la décision : aucune
-  nouvelle fuite, aucune protection d'allié et aucun appel à l'aide ne sont
-  tentés.
+  nouvelle fuite, aucune protection d'allié, aucun appel à l'aide et aucun
+  repositionnement ne sont tentés.
 
 ### Priorité et cooldown
 
-- `TryRetreat` est évaluée avant `TryProtectAlly` puis `TryCallForHelp`.
-  La protection et l'appel ne sont tentés que si la fuite n'a pas consommé la
-  décision.
+- Depuis la Phase 5, l'ordre d'évaluation dépend des scores et des
+  multiplicateurs (voir la section Phase 5) ; le score de base élevé de la fuite
+  la place généralement en tête lorsqu'elle est déclenchée. Une fuite en cours
+  consomme la décision.
 - Le cooldown de fuite est propre à la créature et n'est pas partagé entre
   créatures.
 - `CombatAI.Retreat.Enable = 0` désactive la tactique ; le suivi d'un
@@ -322,16 +346,17 @@ décision lorsqu'elle démarre ou lorsqu'un déplacement de fuite est encore act
 
 ## Phase 4 — protection des alliés
 
-La Phase 4 ajoute deux branches de protection, évaluées après la fuite et avant
-l'appel à l'aide. Une seule action tactique est exécutée par décision : si la
-fuite consomme la décision, la protection et l'appel ne sont pas tentés ; si la
-protection agit, l'appel ne l'est pas. Le budget `CombatAI.MaxDecisionsPerTick`
-s'applique en amont.
+La Phase 4 ajoute deux branches de protection. Depuis la Phase 5, la protection
+est un candidat noté parmi les quatre ; elle n'est tentée que si les candidats
+mieux notés n'ont pas consommé la décision. Une seule action tactique est
+exécutée par décision. Le budget `CombatAI.MaxDecisionsPerTick` s'applique en
+amont.
 
 ### Priorité et conditions communes
 
-- Ordre d'évaluation : `TryRetreat`, puis `TryProtectAlly`, puis
-  `TryCallForHelp`.
+- Depuis la Phase 5, l'ordre d'évaluation dépend des scores (voir la section
+  Phase 5) ; les branches de protection ne s'exécutent que si aucun candidat
+  mieux noté n'a agi.
 - L'initiateur doit être éligible et opt-in, en combat et vivant, et
   `CombatAI.ProtectAlly.Enable = 1`.
 - Le cooldown de protection de la créature (`protectAllyCooldownEnd`) doit être
@@ -397,7 +422,8 @@ Ces valeurs sont fixées dans le code et ne sont pas des clés de configuration 
 | Cooldown d'interception | `5000` ms | Délai par créature après une interception démarrée. |
 | Identifiant du point d'interception | `0x4D434150` | Évite les collisions avec les points de SmartAI. |
 
-Le module conserve **23 clés de configuration** ; la Phase 4 n'ajoute aucune clé.
+La Phase 4 n'ajoute aucune clé ; la Phase 5 porte le total à 24 clés (voir la
+section Phase 5).
 
 ### Garanties
 
@@ -415,6 +441,115 @@ Le module conserve **23 clés de configuration** ; la Phase 4 n'ajoute aucune cl
 
 Le protocole et le résultat du test de fumée sont dans
 [`docs/phase-4-test.md`](docs/phase-4-test.md).
+
+## Phase 5 — moteur de décision
+
+La Phase 5 remplace l'ordre fixe des tactiques par un moteur de scores. À chaque
+décision éligible hors fuite en cours, le moteur construit les candidats
+disponibles, applique les pondérations d'intelligence et une variation aléatoire
+bornée, trie les candidats par score décroissant, puis tente les tactiques dans
+cet ordre. La première action réussie consomme la décision ; une tentative
+échouée passe au candidat suivant. Si aucun candidat n'agit,
+`decisionsNoAction` est incrémenté.
+
+### Scores de base et pondération
+
+| Tactique | Score de base | Multiplicateur |
+|---|---:|---|
+| Fuite (`Retreat`) | `100 + (seuil - vie) * 2` lorsque la vie est inférieure ou égale au seuil | `(0.5 + IndividualIntelligence)` |
+| Protection (`ProtectAlly`) | `60` | `(0.5 + GroupIntelligence)` |
+| Appel à l'aide (`CallForHelp`) | `40` | `(0.5 + GroupIntelligence)` |
+| Repositionnement (`Reposition`) | `30` | `(0.5 + IndividualIntelligence)` |
+
+- Un candidat n'est ajouté que si sa tactique est activée et si son cooldown de
+  créature est échu. La fuite exige en plus une vie inférieure ou égale à
+  `CombatAI.Retreat.HealthThresholdPct`. L'appel exige en plus l'autorisation du
+  coordinateur. La protection et le repositionnement restent candidats même si
+  leurs conditions internes échouent ensuite : la tentative échouée ne consomme
+  pas la décision.
+- Les multiplicateurs ne désactivent jamais une tactique : à `0`, le score est
+  divisé par deux ; à `1`, il est multiplié par 1,5.
+- Chaque candidat reçoit une variation aléatoire de `0.9` à `1.1`, soit ±10 %.
+  Cette variation ne masque pas une tactique nettement dominante.
+- Les scores sont triés par ordre décroissant. Les égalités ne sont pas garanties
+  dans un ordre particulier.
+- Une fuite en cours (`moduleMoving`) est traitée avant le calcul des scores : le
+  moteur appelle le watchdog de fuite et consomme la décision sans compter de
+  nouvelle action. Les autres tactiques ne sont pas tentées.
+- Le budget `CombatAI.MaxDecisionsPerTick` s'applique en amont ; une décision
+  différée ne construit aucun candidat.
+
+### Coordinateur
+
+- La clé de groupe est partagée via `ModCombatAIGroupKey.h/.cpp` : `mapId` +
+  cellule carrée de 40 yards (`floor(x / 40)`, `floor(y / 40)`). Le cooldown de
+  groupe de l'appel à l'aide utilise la même clé ; son comportement est inchangé.
+- Le coordinateur de la Phase 5 compte les actions coopératives dans une fenêtre
+  de 5 s par groupe. Le plafond est
+  `1 + uint32(GroupIntelligence * 2)` : `1` action à `0`, `2` à `0.5`, `3` à
+  `1.0`.
+- Seules deux actions sont coopératives : un appel à l'aide réussi et une
+  interception de protection réussie. **Les soins ne sont pas limités par le
+  coordinateur.** La fuite et le repositionnement ne passent jamais par lui.
+- L'appel est filtré dans le moteur avant la tentative ; l'interception se filtre
+  elle-même dans `TryProtectAlly`, juste avant le `MovePoint`. Chaque action
+  coopérative réussie est enregistrée dans la fenêtre du groupe.
+- La fenêtre expire après 5 s ; un groupe inactif depuis plus de 10 s est oublié
+  lors de l'élagage périodique (toutes les 60 s). Le coordinateur ne connaît pas
+  la composition réelle d'un groupe : deux créatures dans la même cellule sont
+  traitées comme un groupe.
+
+### Diagnostics
+
+- `actionsRetreat`, `actionsProtectAlly`, `actionsCallForHelp` et
+  `actionsReposition` comptent les sélections réussies ; `decisionsNoAction`
+  compte les décisions où aucun des candidats évalués n'a agi (hors fuite en
+  cours, traitée avant le calcul). Un même compteur `actions*` peut être
+  incrémenté plusieurs fois par la même créature : il ne mesure pas des créatures
+  distinctes.
+- `repositionAttempts` compte les ordres de recul (`MovePoint`) émis.
+- Avec `CombatAI.Debug = 1`, chaque sélection écrit la tactique et son score en
+  `LOG_DEBUG("scripts.ai", ...)`. Un résumé `LOG_INFO("scripts.ai", ...)` est
+  émis au plus toutes les 60 s (voir la section Journalisation et diagnostics).
+- `.reload config` réinitialise l'horodatage du résumé, les contextes, les
+  cooldowns de groupe et le budget du tick ; les compteurs cumulés ne sont pas
+  remis à zéro.
+
+### Repositionnement
+
+La Phase 5 ajoute `CombatAI.Reposition.Enable` (bool, défaut `1`). Le
+repositionnement est un candidat de score `30 * (0.5 + IndividualIntelligence)`,
+avec la variation ±10 %. Il ne s'exécute que si `TryReposition` réussit.
+
+- La créature ne doit pas être en cours de cast (`UNIT_STATE_CASTING`).
+- Aucune fuite suivie (`moduleMoving`) ni générateur `POINT_MOTION_TYPE`,
+  `FLEEING_MOTION_TYPE` ou `TIMED_FLEEING_MOTION_TYPE` sur l'emplacement actif ou
+  `MOTION_SLOT_CONTROLLED`.
+- Une cible vivante doit exister : victime (`GetVictim()`), à défaut victime
+  courante de la liste de menace, à défaut n'importe quelle cible de menace.
+- La distance à cette cible doit être strictement inférieure à 5 yards.
+- La créature doit posséder au moins un sort dans `m_spells` dont la portée
+  maximale (`GetMaxRange(true, créature)` ou `GetMaxRange(false, créature)`)
+  atteint 25 yards.
+- La destination est à 15 yards de la position actuelle, à l'opposé de la cible
+  sur le plan horizontal, avec le même Z. Si les deux positions sont confondues
+  (longueur inférieure à 0,1), le vecteur de repli est `+X`.
+- Le déplacement utilise `MovePoint` avec l'identifiant `0x4D434152`, puis arme un
+  cooldown de 5 s par créature et incrémente `repositionAttempts`.
+- Aucun changement de cible ni de menace, aucun sort lancé et aucune
+  interruption de cast : une créature qui cast est simplement ignorée.
+
+| Constante | Valeur | Rôle |
+|---|---:|---|
+| Distance de déclenchement | `< 5` yards | La cible doit être plus proche que ce seuil. |
+| Distance de recul | `15` yards | Distance visée à l'opposé de la cible. |
+| Portée minimale d'un sort | `25` yards | Un sort de `m_spells` doit atteindre au moins cette portée. |
+| Cooldown de repositionnement | `5000` ms | Délai par créature après un recul. |
+| Identifiant du point de repositionnement | `0x4D434152` | Évite les collisions avec les points de SmartAI. |
+
+Le module compte **24 clés de configuration** ; la Phase 5 ajoute
+`CombatAI.Reposition.Enable`. Le protocole et le résultat du test de fumée sont
+dans [`docs/phase-5-test.md`](docs/phase-5-test.md).
 
 ## Éligibilité et exclusions
 
@@ -443,34 +578,42 @@ Conséquences pratiques :
 - `OpenWorldOnly = 0` autorise aussi les instances, raids, BG et arènes, sous
   réserve des autres filtres ; ce réglage doit être réservé aux tests.
 - `OptInOnly = 0` élargit le module à toutes les créatures qui passent les autres
-  filtres. Ce n'est pas le mode recommandé en Phase 4.
+  filtres. Ce n'est pas le mode recommandé en Phase 5.
 - Cette politique ne s'applique qu'à l'initiateur d'une tactique. Les alliés
   retenus par `CanAssistTo` (appel à l'aide), comme destination de fuite, comme
   cible de soin ou comme soigneur protégé ne sont pas soumis à l'éligibilité du
-  module ni à l'opt-in (voir les sections Phase 2, Phase 3 et Phase 4).
+  module ni à l'opt-in (voir les sections Phase 2, Phase 3, Phase 4 et Phase 5).
 
 ## Compatibilité
 
 - **Pas de `GetCreatureAI`.** Ce hook retourne la première IA non nulle et
   remplacerait SmartAI ou les scripts existants. Le module utilise uniquement des
   hooks additifs : l'IA native continue de tourner et peut ignorer ou écraser de
-  futurs ordres.
+  futurs ordres. Le moteur de décision ne choisit qu'une tactique du module ; il
+  ne remplace ni SmartAI ni les scripts.
 - **SmartAI n'est pas remplacé.** Ses actions natives d'appel à l'aide, de fuite
-  ou de soin restent actives ; les phases 2 à 4 ajoutent l'appel borné, la fuite
-  et la protection décrits ci-dessus, sans désactiver ces actions. Un soin natif
-  de SmartAI peut donc s'ajouter à celui du module ; le compteur
-  `protectAllyHeals` ne compte que les casts du module.
+  ou de soin restent actives ; les phases 2 à 5 ajoutent l'appel borné, la fuite,
+  la protection et le repositionnement décrits ci-dessus, sans désactiver ces
+  actions. Un soin natif de SmartAI peut donc s'ajouter à celui du module ; le
+  compteur `protectAllyHeals` ne compte que les casts du module.
 - **Mouvement natif.** La fuite utilise `MovePoint` et `MoveFleeing` du core,
-  l'interception utilise `MovePoint`, et le module ne remplace pas l'IA :
-  celle-ci peut terminer ou remplacer ces déplacements. Pour la fuite, le
-  watchdog traite la disparition du générateur comme une fin de fuite.
+  l'interception et le repositionnement utilisent `MovePoint`, et le module ne
+  remplace pas l'IA : celle-ci peut terminer ou remplacer ces déplacements. Pour
+  la fuite, le watchdog traite la disparition du générateur comme une fin de
+  fuite.
 - **Pas de menace artificielle.** L'appel à l'aide engage les alliés par le
   mécanisme natif ; l'interception appelle `EngageWithTarget`, qui ajoute une
   référence de combat à zéro menace. Le module n'appelle pas directement
   `AddThreat`, `ModifyThreat` ou `ScaleThreat`.
-- **Pas de changement de cible.** L'interception ne fait pas `AttackStart` et ne
-  remplace pas la victime de l'initiateur ; le soin ne change pas la cible de
-  combat. Seuls les initiateurs éligibles et opt-in exécutent une action.
+- **Pas de changement de cible.** L'interception et le repositionnement ne font
+  pas `AttackStart` et ne remplacent pas la victime de l'initiateur ; le soin ne
+  change pas la cible de combat. Seuls les initiateurs éligibles et opt-in
+  exécutent une action.
+- **Coordinateur coopératif uniquement.** Le plafond du coordinateur ne
+  s'applique qu'à l'appel à l'aide et à l'interception de protection ; les soins,
+  la fuite et le repositionnement ne sont pas limités par lui. Deux créatures
+  d'une même cellule de 40 yards sont traitées comme un groupe, sans vérifier
+  l'appartenance réelle.
 - **mod-hunts.** Ses proies d'élite et ses summons peuvent avoir un `ScriptName`
   vide, et certains summons n'ont pas d'`AIName` : l'exclusion par `ScriptName` ne
   suffit donc pas. Ce module tiers écrit lui-même mouvement et engagement. Tant
@@ -486,7 +629,7 @@ Conséquences pratiques :
   `Addmod_combat_aiScripts()` et conserve les clés de configuration `CombatAI.*`.
 - Aucun patch du core n'est nécessaire ; aucune modification des autres modules.
 
-## Limites actuelles (Phase 4)
+## Limites actuelles (Phase 5)
 
 - Un test de fumée local à trois créatures temporaires a validé l'engagement
   d'un allié par l'appel à l'aide et l'absence de seconde tentative sur cinq
@@ -516,15 +659,31 @@ Conséquences pratiques :
   obstacles, les durées de plusieurs minutes et la charge ne sont pas validés ;
   les constantes (20 yards, 80 %, 60 %, 1 s, 5 s) sont fixées dans le code. Le
   protocole et le journal sont dans `docs/phase-4-test.md`.
-- La Phase 4 exécute trois tactiques. Le repositionnement et le moteur de
-  décision restent à implémenter ; `IndividualIntelligence` et
-  `GroupIntelligence` sont présentes mais inertes.
+- Un quatrième test de fumée local a validé les quatre tactiques sur quatre
+  scénarios (A fuite, B protection, C appel, D repositionnement). À T+4 s et
+  T+8 s, `retreatActions=2`, `protectActions=2`, `callActions=1`,
+  `repositionActions=1` puis `2`, et `noAction=34` puis `80`. A a rejoint son
+  allié (`A_distAlly=0`), B est passé de `29.069767` % à `100` %, l'allié de C
+  est engagé (`C_allyEngaged=true`) et D est passé de 3 à 15 yards avec
+  `D_type=0` (`IDLE_MOTION_TYPE`). Les compteurs sont agrégés sur les quatre
+  scénarios : ils ne permettent pas d'attribuer chaque action à un scénario. Le
+  watchdog de fuite n'ajoute pas de nouvelle action pendant un déplacement en
+  cours. Le protocole et le journal sont dans `docs/phase-5-test.md`.
+- Les scores (100, 60, 40, 30, pente de 2 par point de vie sous le seuil,
+  multiplicateurs et variation ±10 %) sont des heuristiques de départ, non
+  réglées par une campagne d'équilibrage. Les tests joueurs solo/duo/groupe et
+  les tests de charge ne sont pas réalisés. Le coordinateur travaille par
+  fenêtre de 5 s et cellule de 40 yards, et le résumé de diagnostic est émis au
+  plus toutes les 60 s. Les compteurs `actions*` comptent des sélections, pas
+  nécessairement des créatures distinctes.
 - La ligne de vue (`IsWithinLOSInMap()`) et le filtre de phase fourni par
   `CreatureWorker` sont utilisés et ont été exercés par les tests de fumée ; les
   cas complexes (obstacles, phases multiples) restent à valider en jeu.
-- Le cooldown de groupe de l'appel à l'aide est local et approximatif : il est
-  indexé par `mapId` et par cellule de 40 yards, sans tenir compte de la
-  composition réelle du groupe.
+- Le cooldown de groupe de l'appel à l'aide et le coordinateur de la Phase 5
+  sont locaux et approximatifs : clé `mapId` + cellule de 40 yards, sans tenir
+  compte de la composition réelle du groupe. Le coordinateur applique une
+  fenêtre de 5 s et un plafond `1 + uint32(GroupIntelligence * 2)` aux seules
+  actions coopératives.
 - Les alliés ne sont pas tenus d'être éligibles au module ni d'être opt-in ; seul
   l'initiateur l'est. Un allié peut donc être une créature que le module ne
   piloterait jamais par ailleurs. Il en va de même du soigneur protégé et de
@@ -533,16 +692,20 @@ Conséquences pratiques :
   ou de type en cours de combat n'est pas réévalué avant la destruction du contexte
   (fin de combat, evade, mort, despawn ou rechargement de configuration).
 - Les compteurs sont en mémoire uniquement. Un `.reload config` ne les remet pas
-  à zéro : seuls les contextes, les cooldowns de groupe et le budget du tick sont
-  réinitialisés.
+  à zéro : seuls les contextes, les cooldowns de groupe, le coordinateur,
+  l'horodatage du résumé de diagnostic et le budget du tick sont réinitialisés.
 - Aucun chemin de code ne modifie les statistiques ni la liste de sorts. La cible
   de l'initiateur n'est pas remplacée : le soin lance un sort sur un allié et
   l'interception ajoute une référence de combat à zéro menace. Les seules
-  modifications de mouvement proviennent de `MovePoint` et `MoveFleeing`. Les
-  seules modifications de menace demandées par le module proviennent des appels
-  natifs à `EngageWithTarget` (engagement d'alliés de l'appel à l'aide, référence
-  à zéro menace de l'interception) ; le soin peut produire la menace native
-  associée au sort.
+  modifications de mouvement proviennent de `MovePoint` (fuite, interception,
+  repositionnement) et `MoveFleeing` (repli de fuite). Les seules modifications
+  de menace demandées par le module proviennent des appels natifs à
+  `EngageWithTarget` (engagement d'alliés de l'appel à l'aide, référence à zéro
+  menace de l'interception) ; le soin peut produire la menace native associée au
+  sort.
+- Le repositionnement ne teste ni ligne de vue, ni obstacle, ni leash : il
+  ordonne un point à 15 yards sur le plan horizontal, avec le Z courant, puis
+  laisse le core ou l'IA native terminer ou remplacer le déplacement.
 - L'IA native des alliés, du soigneur protégé et de l'attaquant reste maîtresse
   de leur comportement : elle peut changer de cible, lancer ses propres soins ou
   ignorer l'engagement demandé.

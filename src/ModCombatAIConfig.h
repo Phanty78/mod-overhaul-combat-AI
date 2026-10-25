@@ -31,6 +31,7 @@ enum class ModCombatAIConfigKey : uint32
     RetreatCooldownMs,
     RetreatRadius,
     ProtectAllyEnable,
+    RepositionEnable,
     MaxDecisionsPerTick,
     Debug,
     Count
@@ -60,6 +61,7 @@ public:
     [[nodiscard]] uint32 RetreatCooldownMs() const { return GetConfigValue<uint32>(ModCombatAIConfigKey::RetreatCooldownMs); }
     [[nodiscard]] float RetreatRadius() const { return GetConfigValue<float>(ModCombatAIConfigKey::RetreatRadius); }
     [[nodiscard]] bool ProtectAllyEnabled() const { return GetConfigValue<bool>(ModCombatAIConfigKey::ProtectAllyEnable); }
+    [[nodiscard]] bool RepositionEnabled() const { return GetConfigValue<bool>(ModCombatAIConfigKey::RepositionEnable); }
     [[nodiscard]] uint32 MaxDecisionsPerTick() const { return GetConfigValue<uint32>(ModCombatAIConfigKey::MaxDecisionsPerTick); }
     [[nodiscard]] bool Debug() const { return GetConfigValue<bool>(ModCombatAIConfigKey::Debug); }
 

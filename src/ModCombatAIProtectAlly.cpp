@@ -1,6 +1,8 @@
 #include "ModCombatAIProtectAlly.h"
 #include "ModCombatAIConfig.h"
+#include "ModCombatAICoordinator.h"
 #include "ModCombatAIState.h"
+#include "ModCombatAITactic.h"
 #include "CellImpl.h"
 #include "Creature.h"
 #include "GridNotifiers.h"
@@ -279,6 +281,9 @@ bool mod_combat_ai::TryProtectAlly(Creature* creature, ModCombatAIContext& conte
     if (creature->GetVictim() == attacker)
         return false;
 
+    if (!g_ModCombatAICoordinator.CanAct(creature, ModCombatAITactic::ProtectAlly, now, g_ModCombatAIConfig.GroupIntelligence()))
+        return false;
+
     float const pointX = (healer->GetPositionX() + attacker->GetPositionX()) * 0.5f;
     float const pointY = (healer->GetPositionY() + attacker->GetPositionY()) * 0.5f;
     float const pointZ = (healer->GetPositionZ() + attacker->GetPositionZ()) * 0.5f;
@@ -288,6 +293,7 @@ bool mod_combat_ai::TryProtectAlly(Creature* creature, ModCombatAIContext& conte
     ++state.Counters().protectAllyAttempts;
     ++state.Counters().protectAllyIntercepts;
     context.protectAllyCooldownEnd = now + ProtectInterceptCooldownMs;
+    g_ModCombatAICoordinator.OnAction(creature, ModCombatAITactic::ProtectAlly, now);
 
     if (g_ModCombatAIConfig.Debug())
     {

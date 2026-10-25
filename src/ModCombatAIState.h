@@ -15,6 +15,7 @@ struct ModCombatAIContext
     uint32 callForHelpCooldownEnd = 0;
     uint32 retreatCooldownEnd = 0;
     uint32 protectAllyCooldownEnd = 0;
+    uint32 repositionCooldownEnd = 0;
     uint32 moveStartMs = 0;
     uint32 lastProgressMs = 0;
     float lastX = 0.0f;
@@ -44,6 +45,12 @@ struct ModCombatAICounters
     uint64 protectAllyHeals = 0;
     uint64 protectAllyIntercepts = 0;
     uint64 protectAllyNoTarget = 0;
+    uint64 repositionAttempts = 0;
+    uint64 actionsRetreat = 0;
+    uint64 actionsProtectAlly = 0;
+    uint64 actionsCallForHelp = 0;
+    uint64 actionsReposition = 0;
+    uint64 decisionsNoAction = 0;
 };
 
 class ModCombatAIState
