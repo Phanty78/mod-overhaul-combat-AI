@@ -31,6 +31,10 @@ struct ModCombatAICounters
     uint64 skippedNotEligible = 0;
     uint64 skippedBudget = 0;
     uint64 contextsCreated = 0;
+    uint64 callForHelpAttempts = 0;
+    uint64 callForHelpAlliesEngaged = 0;
+    uint64 callForHelpGroupSkipped = 0;
+    uint64 callForHelpNoAllies = 0;
 };
 
 class ModCombatAIState

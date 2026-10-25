@@ -1,4 +1,5 @@
 #include "ModCombatAICreature.h"
+#include "ModCombatAICallForHelp.h"
 #include "ModCombatAIConfig.h"
 #include "ModCombatAIEligibility.h"
 #include "ModCombatAIState.h"
@@ -57,6 +58,9 @@ void ModCombatAICreatureScript::OnAllCreatureUpdate(Creature* creature, uint32 d
 
     context->lastDecisionMs = now;
     ++state.Counters().decisionsEvaluated;
+
+    // Phase 2: bounded call for help is the only tactic, so at most one action per decision.
+    mod_combat_ai::TryCallForHelp(creature, *context, now);
 
     if (g_ModCombatAIConfig.Debug())
     {
