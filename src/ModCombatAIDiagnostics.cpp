@@ -56,10 +56,14 @@ void ModCombatAIDiagnostics::LogSummary(uint32 now, bool enabled)
     _lastSummaryMs = now;
 
     ModCombatAICounters const& counters = ModCombatAIState::Instance().Counters();
-    LOG_INFO("scripts.ai", "mod-combat-ai diagnostics: decisions={} noAction={} retreat={} protect={} callForHelp={} reposition={} skippedBudget={} contexts={}",
+    uint64 const avgDecisionUs = counters.decisionTimeSamples
+        ? counters.decisionTimeNs / counters.decisionTimeSamples / 1000
+        : 0;
+
+    LOG_INFO("scripts.ai", "mod-combat-ai diagnostics: decisions={} noAction={} retreat={} protect={} callForHelp={} reposition={} skippedBudget={} contexts={} avgDecisionUs={}",
         counters.decisionsEvaluated, counters.decisionsNoAction, counters.actionsRetreat,
         counters.actionsProtectAlly, counters.actionsCallForHelp, counters.actionsReposition,
-        counters.skippedBudget, counters.contextsCreated);
+        counters.skippedBudget, counters.contextsCreated, avgDecisionUs);
 }
 
 void ModCombatAIDiagnostics::Reset()

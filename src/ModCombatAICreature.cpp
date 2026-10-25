@@ -8,6 +8,8 @@
 #include "Random.h"
 #include "Timer.h"
 
+#include <chrono>
+
 ModCombatAICreatureScript::ModCombatAICreatureScript() : AllCreatureScript("ModCombatAICreatureScript")
 {
 }
@@ -60,7 +62,18 @@ void ModCombatAICreatureScript::OnAllCreatureUpdate(Creature* creature, uint32 d
     ++state.Counters().decisionsEvaluated;
 
     // The decision engine scores the four tactics and executes at most one action.
-    ModCombatAIDecisionEngine::Instance().Decide(creature, *context, now);
+    if (g_ModCombatAIConfig.Debug())
+    {
+        auto const start = std::chrono::steady_clock::now();
+        ModCombatAIDecisionEngine::Instance().Decide(creature, *context, now);
+        auto const end = std::chrono::steady_clock::now();
+        state.Counters().decisionTimeNs += uint64(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count());
+        ++state.Counters().decisionTimeSamples;
+    }
+    else
+    {
+        ModCombatAIDecisionEngine::Instance().Decide(creature, *context, now);
+    }
 
     if (g_ModCombatAIConfig.Debug())
     {

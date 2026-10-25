@@ -51,6 +51,8 @@ struct ModCombatAICounters
     uint64 actionsCallForHelp = 0;
     uint64 actionsReposition = 0;
     uint64 decisionsNoAction = 0;
+    uint64 decisionTimeNs = 0;
+    uint64 decisionTimeSamples = 0;
 };
 
 class ModCombatAIState

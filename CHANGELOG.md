@@ -1,5 +1,66 @@
 # Changelog
 
+## 1.0.0 - 2026-10-25
+
+### Ajouté
+
+- Instrumentation de mesure réservée à `CombatAI.Debug = 1` : compteurs
+  `decisionTimeNs` (cumul en nanosecondes) et `decisionTimeSamples` (nombre
+  d'échantillons), et moyenne `avgDecisionUs`
+  (`decisionTimeNs / decisionTimeSamples / 1000`, division entière) ajoutée au
+  résumé `scripts.ai`. Seul l'appel au moteur de décision est chronométré ; le
+  hook, l'éligibilité et le budget ne le sont pas. Les scans internes sont inclus
+  dans la mesure du moteur, sans mesure séparée. Aucun changement de comportement
+  quand Debug est à `0`.
+- `docs/benchmark.md` : but, environnement, protocole, journaux OFF/ON exacts,
+  tableaux des compteurs et des durées de mise à jour, interprétation, matrice de
+  non-régression, limites et checklist de déploiement progressif.
+
+### Modifié
+
+- Version `1.0.0` : la Phase 6 finalise le déploiement progressif, le benchmark
+  reproductible et les tests de non-régression. Les quatre tactiques et le moteur
+  de décision sont inchangés ; aucune clé de configuration n'est ajoutée, le
+  total reste à 24.
+- README : état Phase 6, sections « Déploiement progressif » et « Benchmark et
+  non-régression », compteurs de temps documentés, limites et travaux futurs
+  actualisés.
+- Le résumé `scripts.ai` ajoute `avgDecisionUs` à la fin de la ligne existante.
+
+### Notes
+
+- Benchmark local du 2026-10-25 : carte 0, 0 joueur, 100 couples
+  initiateur/ennemi (200 créatures) et 4 sondes d'éligibilité. Le harnais
+  temporaire fait apparaître les créatures à T+20 s et la mesure couvre T+20 s à
+  T+40 s, avec `RecordUpdateTimeDiffInterval = 10000` et
+  `MinRecordUpdateTimeDiff = 0`.
+
+  ```text
+  # module OFF
+  COMBATAI P6 SMOKE RESULT: decisions=0 skippedBudget=0 contexts=0 callAttempts=0 alliesEngaged=0 callActions=0 noAction=0 avgDecisionUs=0 | normal=true excluded=false scripted=false boss=false
+
+  # module ON
+  COMBATAI P6 SMOKE RESULT: decisions=1584 skippedBudget=436 contexts=636 callAttempts=101 alliesEngaged=0 callActions=0 noAction=1584 avgDecisionUs=26 | normal=true excluded=false scripted=false boss=false
+  ```
+
+- Durées de mise à jour après l'apparition des créatures : OFF moyenne 1-2 ms,
+  médiane 1 ms, p95 3-7 ms, p99 4-8 ms, max 10-25 ms ; ON moyenne 1 ms, médiane
+  1 ms, p95 2-3 ms, p99 3-5 ms, max 4-8 ms. Aucune régression mesurable des
+  durées de mise à jour n'a été observée à cette échelle locale de 200 créatures ;
+  ce constat ne définit pas de seuil de production.
+- `avgDecisionUs = 26` est une mesure Debug du seul appel au moteur de décision ;
+  ce n'est pas une latence ni un seuil de production.
+- Les 100 initiateurs étaient déjà engagés : `CanAssistTo` a refusé les alliés
+  engagés. Les `101` tentatives sont des scans et `alliesEngaged = 0` est
+  attendu ; ce n'est pas un test du comportement d'appel à l'aide.
+- Non-régression : entrée `38` éligible ; entrée `940` non éligible avec
+  `ExcludeEntries = 940` ; entrée `349` non éligible (`ScriptName` non vide) ;
+  entrée `1748` non éligible (`CREATURE_TYPE_FLAG_BOSS_MOB`) ; module désactivé,
+  décisions, contextes et actions à `0`. Compilation des modules et de
+  `worldserver` réussie, symbole loader présent, core intact.
+- Le harnais de benchmark temporaire a été retiré ; aucun code de test ne reste
+  dans le module.
+
 ## 0.5.0 - 2026-10-25
 
 ### Ajouté

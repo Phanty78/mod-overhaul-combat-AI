@@ -1,7 +1,7 @@
 # mod-combat-ai
 
-**État : Phase 5 — moteur de décision (version 0.5.0). Les phases 1 à 4
-restent la fondation.**
+**État : Phase 6 — généralisation (version 1.0.0). Les phases 1 à 5 restent la
+fondation.**
 
 Module AzerothCore pour WotLK 3.3.5a. Il ajoute une couche de décision de combat
 externe aux créatures, sans remplacer leur IA native. La Phase 1 a livré
@@ -19,7 +19,11 @@ danger et son attaquant, en ajoutant une référence de combat à zéro menace. 
 Phase 5 ajoute le moteur de décision : les quatre tactiques sont notées, pondérées
 par `IndividualIntelligence` et `GroupIntelligence`, ordonnées par score, avec un
 coordinateur par groupe, des diagnostics périodiques et un repositionnement borné
-des lanceurs à distance. Au plus une action tactique est exécutée par décision.
+des lanceurs à distance. Au plus une action tactique est exécutée par décision. La
+Phase 6 finalise le déploiement progressif, le benchmark reproductible et les
+tests de non-régression du module livré ; les quatre tactiques et le moteur de
+décision sont implémentés et restent inchangés. Elle n'ajoute aucune clé de
+configuration.
 
 Le module est **désactivé par défaut** (`CombatAI.Enable = 0`) et fonctionne en
 **opt-in strict** (`CombatAI.OptInOnly = 1`). Avec la configuration livrée, aucune
@@ -71,7 +75,7 @@ Le rapport d'audit et les limitations détaillées sont dans
    les créatures éligibles de ces cartes : préférer `IncludeEntries` pour un
    déploiement progressif.
 
-Aucune mise à jour SQL n'est requise en Phase 5.
+Aucune mise à jour SQL n'est requise en Phase 6.
 
 ## Configuration
 
@@ -104,7 +108,7 @@ comme modèle). Les 24 clés sont rechargées par `.reload config` via
 | `CombatAI.ProtectAlly.Enable` | bool | `1` | Active la protection des alliés de la Phase 4. À `1`, un soigneur peut soigner un allié blessé et un non-soigneur peut intercepter l'attaquant d'un soigneur en danger. À `0`, aucune des deux branches n'est exécutée et le score de protection n'est pas candidat. Les seuils et cooldowns de ces branches sont des constantes de code, pas des clés. |
 | `CombatAI.Reposition.Enable` | bool | `1` | Active le repositionnement de la Phase 5. À `1`, un lanceur dont un sort atteint au moins 25 yards et dont la cible est à moins de 5 yards recule de 15 yards. À `0`, aucun repositionnement n'est tenté et le score correspondant n'est pas candidat. |
 | `CombatAI.MaxDecisionsPerTick` | uint32 | `64` | Budget global de décisions par tick du monde. Doit être `> 0`. Les décisions au-delà du budget sont différées. |
-| `CombatAI.Debug` | bool | `0` | Si `1`, journalise dans `scripts.ai` l'entrée en combat éligible, chaque décision évaluée, la tactique retenue et son score, le résultat des tentatives d'appel à l'aide, les diagnostics de fuite, de protection et de repositionnement, et un résumé des compteurs toutes les 60 s. |
+| `CombatAI.Debug` | bool | `0` | Si `1`, journalise dans `scripts.ai` l'entrée en combat éligible, chaque décision évaluée, la tactique retenue et son score, le résultat des tentatives d'appel à l'aide, les diagnostics de fuite, de protection et de repositionnement, et un résumé des compteurs toutes les 60 s, dont `avgDecisionUs`. |
 
 Les listes CSV ignorent les espaces autour des valeurs et les jetons vides, non
 numériques ou hors plage. Une valeur invalide pour une clé validée produit un
@@ -174,8 +178,8 @@ tactique (fuite, protection, appel à l'aide ou repositionnement).
   journal n'est émis par allié.
 - Avec `CombatAI.Debug = 1`, un résumé `LOG_INFO("scripts.ai", ...)` est émis au
   plus toutes les 60 s. Il contient les décisions évaluées, les décisions sans
-  action, les sélections par tactique, les décisions différées par le budget et
-  les contextes créés.
+  action, les sélections par tactique, les décisions différées par le budget, les
+  contextes créés et `avgDecisionUs`.
 - Compteurs en mémoire : `decisionsEvaluated`, `skippedNotEligible`,
   `skippedBudget`, `contextsCreated`, `callForHelpAttempts`,
   `callForHelpAlliesEngaged`, `callForHelpGroupSkipped`, `callForHelpNoAllies`,
@@ -183,7 +187,8 @@ tactique (fuite, protection, appel à l'aide ou repositionnement).
   `retreatCompleted`, `protectAllyAttempts`, `protectAllyHeals`,
   `protectAllyIntercepts`, `protectAllyNoTarget`, `repositionAttempts`,
   `actionsRetreat`, `actionsProtectAlly`, `actionsCallForHelp`,
-  `actionsReposition` et `decisionsNoAction`. `callForHelpAttempts` compte les
+  `actionsReposition`, `decisionsNoAction`, `decisionTimeNs` et
+  `decisionTimeSamples`. `callForHelpAttempts` compte les
   scans réellement exécutés, `callForHelpAlliesEngaged` les alliés engagés,
   `callForHelpGroupSkipped` les tentatives bloquées par le cooldown de groupe et
   `callForHelpNoAllies` les scans sans allié qualifié. Côté fuite,
@@ -202,25 +207,38 @@ tactique (fuite, protection, appel à l'aide ou repositionnement).
   lesquelles aucun candidat n'a agi ; une fuite en cours est traitée avant ce
   calcul et n'incrémente pas ce compteur. Une même créature peut incrémenter
   plusieurs fois un compteur `actions*` :
-  ces compteurs ne mesurent pas des créatures distinctes. Le module n'expose ni
-  commande console ni export périodique de ces compteurs.
+  ces compteurs ne mesurent pas des créatures distinctes. Les deux compteurs de
+  temps ne sont alimentés que si `CombatAI.Debug = 1`, autour du seul appel au
+  moteur de décision : `decisionTimeNs` cumule les nanosecondes et
+  `decisionTimeSamples` compte les échantillons. `avgDecisionUs` vaut
+  `decisionTimeNs / decisionTimeSamples / 1000` (division entière), ou `0` sans
+  échantillon ; il ne mesure ni le hook, ni l'éligibilité, ni le budget. Les scans
+  internes sont inclus dans l'appel mesuré, sans mesure séparée. Le module
+  n'expose ni commande console ni export périodique de ces compteurs.
 
-### Ce qui n'est pas fait en Phase 5
+### Ce qui n'est pas fait en Phase 6
 
-À l'issue de la Phase 5, le module implémente l'appel à l'aide, la fuite, la
-protection des alliés et le repositionnement, sélectionnés par le moteur de
-décision. Le module ne change pas la cible de l'initiateur : l'interception ajoute
-une référence de combat à zéro menace via `EngageWithTarget`, sans `AttackStart`
-ni remplacement de la victime ; le repositionnement ne touche ni à la cible ni à
-la menace. Le soin ne sélectionne que des sorts positifs `SPELL_EFFECT_HEAL` déjà
+La livraison de la Phase 6 est terminée : déploiement progressif documenté,
+benchmark local, non-régression et instrumentation de mesure sous
+`CombatAI.Debug`. Le module implémente l'appel à l'aide, la fuite, la protection
+des alliés et le repositionnement, sélectionnés par le moteur de décision. Le
+module ne change pas la cible de l'initiateur : l'interception ajoute une
+référence de combat à zéro menace via `EngageWithTarget`, sans `AttackStart` ni
+remplacement de la victime ; le repositionnement ne touche ni à la cible ni à la
+menace. Le soin ne sélectionne que des sorts positifs `SPELL_EFFECT_HEAL` déjà
 présents dans `m_spells` ; aucun sort n'est inventé, appris ou ajouté à la
 créature. La fuite déplace la créature avec les générateurs natifs `MovePoint`
 (vers un allié) et `MoveFleeing` (repli sans allié) ; l'interception et le
 repositionnement utilisent `MovePoint`, sans remplacer l'IA. Les scores, les
-multiplicateurs et les constantes de repositionnement sont des heuristiques de
-départ, pas des valeurs d'équilibrage. La généralisation à d'autres types de
-créatures, les benchmarks de charge et le réglage fin des scores restent des
-travaux ultérieurs (Phase 6).
+multiplicateurs et les constantes de repositionnement restent des heuristiques de
+départ, pas des valeurs d'équilibrage.
+
+Restent hors périmètre :
+
+- l'extension à d'autres types de créatures que les humanoïdes ;
+- la validation avec des joueurs en solo, duo ou groupe, ainsi que la validation
+  de charge en conditions de production ;
+- une commande console ou un export périodique des compteurs, facultatif.
 
 ## Phase 2 — appel à l'aide
 
@@ -551,6 +569,102 @@ Le module compte **24 clés de configuration** ; la Phase 5 ajoute
 `CombatAI.Reposition.Enable`. Le protocole et le résultat du test de fumée sont
 dans [`docs/phase-5-test.md`](docs/phase-5-test.md).
 
+## Phase 6 — généralisation
+
+La Phase 6 ne change ni les quatre tactiques ni le moteur de décision. Elle
+finalise le déploiement progressif, le benchmark reproductible et les tests de
+non-régression. Elle ajoute une instrumentation de mesure réservée à
+`CombatAI.Debug = 1` : `decisionTimeNs`, `decisionTimeSamples` et la moyenne
+`avgDecisionUs` du résumé de diagnostic. Aucune clé de configuration n'est
+ajoutée ; le total reste à 24.
+
+### Déploiement progressif
+
+1. Commencer avec `CombatAI.Enable = 0`, `CombatAI.OptInOnly = 1`,
+   `CombatAI.Debug = 1` et une liste `CombatAI.IncludeEntries` courte, contenant
+   des entrées de créature réelles. Vérifier la ligne de chargement, puis activer
+   `CombatAI.Enable = 1`. `CombatAI.IncludeMaps` est beaucoup plus large qu'une
+   liste d'entrées : la réserver aux cartes dont les créatures sont connues.
+2. Surveiller le canal `scripts.ai` pendant la montée en charge : décisions
+   évaluées, tactique retenue et score, diagnostics des tactiques, puis résumé des
+   compteurs (dont `avgDecisionUs`) au plus toutes les 60 s.
+3. Avant d'élargir, exclure par entrée (`CombatAI.ExcludeEntries`) ou par carte
+   (`CombatAI.ExcludeMaps`) les proies de mod-hunts et les summons dynamiques de
+   mod-living-world. Leur `ScriptName` est vide : le filtre `ScriptName` ne les
+   écarte pas.
+4. Augmenter progressivement `CombatAI.IncludeEntries`, puis les cartes via
+   `CombatAI.IncludeMaps`, en contrôlant les compteurs et les durées de mise à
+   jour à chaque palier.
+5. Régler `CombatAI.DecisionIntervalMs`, `CombatAI.DecisionJitterMs` et
+   `CombatAI.MaxDecisionsPerTick` selon la charge observée. Surveiller
+   `skippedBudget` : un budget saturé diffère des décisions.
+6. Désactiver sélectivement une tactique si nécessaire :
+   `CombatAI.CallForHelp.Enable`, `CombatAI.Retreat.Enable`,
+   `CombatAI.ProtectAlly.Enable` et `CombatAI.Reposition.Enable`. Les rayons,
+   seuils et cooldowns associés restent les clés de la section Configuration.
+7. Stabiliser. Repasser `CombatAI.Debug = 0` après validation : les compteurs de
+   temps ne sont pas alimentés et aucun résumé périodique n'est émis. Continuer à
+   surveiller les durées de mise à jour du serveur.
+8. `.reload config` relit les 24 clés et réinitialise contextes, cooldowns de
+   groupe, coordinateur, horodatage du résumé et budget du tick ; les compteurs
+   cumulés restent en mémoire. Ce rechargement n'a pas été exercé au runtime
+   pendant la Phase 6.
+
+### Benchmark et non-régression
+
+Benchmark local du 2026-10-25 : carte 0, 0 joueur, 100 couples initiateur/ennemi
+(200 créatures) et 4 sondes d'éligibilité. Le harnais temporaire fait apparaître
+les créatures à T+20 s ; la mesure couvre T+20 s à T+40 s. Les durées de mise à
+jour sont enregistrées avec `RecordUpdateTimeDiffInterval = 10000` et
+`MinRecordUpdateTimeDiff = 0`. La passe ON utilise `CombatAI.Debug = 1` ; la
+passe OFF laisse le module désactivé. Le protocole, les journaux et
+l'interprétation complète sont dans [`docs/benchmark.md`](docs/benchmark.md).
+
+Les libellés `decisions`, `skippedBudget`, `contexts`, etc. sont ceux de la
+ligne de résultat du harnais ; `docs/benchmark.md` donne la correspondance avec
+les compteurs internes.
+
+| Mesure | OFF | ON |
+|---|---:|---:|
+| `decisions` | 0 | 1584 |
+| `skippedBudget` | 0 | 436 |
+| `contexts` | 0 | 636 |
+| `callAttempts` | 0 | 101 |
+| `alliesEngaged` | 0 | 0 |
+| `callActions` | 0 | 0 |
+| `noAction` | 0 | 1584 |
+| `avgDecisionUs` | 0 | 26 |
+| Mise à jour, moyenne | 1–2 ms | 1 ms |
+| Mise à jour, médiane | 1 ms | 1 ms |
+| Mise à jour, p95 | 3–7 ms | 2–3 ms |
+| Mise à jour, p99 | 4–8 ms | 3–5 ms |
+| Mise à jour, max | 10–25 ms | 4–8 ms |
+
+- Aucune régression mesurable des durées de mise à jour en régime stable à cette
+  échelle locale de 200 créatures : les plages ON restent comparables ou
+  inférieures aux plages OFF. Ce résultat local ne définit pas de seuil de
+  production.
+- `avgDecisionUs = 26` mesure uniquement l'appel au moteur de décision, avec
+  `CombatAI.Debug = 1` ; la mesure n'existe que sous Debug et ne doit pas être
+  lue comme une latence de production.
+- Les 100 initiateurs étaient déjà engagés : `CanAssistTo` a refusé les alliés
+  engagés, d'où `callAttempts = 101` scans et `alliesEngaged = 0`. Ce zéro est
+  attendu et ne teste pas le comportement d'appel à l'aide.
+- `noAction = 1584` égale `decisions` : aucun candidat n'a agi dans ce scénario.
+
+| Sonde | Entrée | Condition | Éligible | Champ observé |
+|---|---:|---|---|---|
+| Normale | `38` | aucun filtre | `true` | `normal=true` |
+| Exclue | `940` | `ExcludeEntries = 940` | `false` | `excluded=false` |
+| Scriptée | `349` | `ScriptName` non vide | `false` | `scripted=false` |
+| Boss | `1748` | `CREATURE_TYPE_FLAG_BOSS_MOB` | `false` | `boss=false` |
+
+Module désactivé : décisions, contextes et actions à `0`. La compilation des
+modules et de `worldserver` réussit, le symbole loader est présent et le core
+n'est pas modifié.
+Les entrées `349` et `1748` sont respectivement refusées par le filtre
+`ScriptName` et le drapeau boss ; `940` est refusée par l'exclusion configurée.
+
 ## Éligibilité et exclusions
 
 Une créature n'est éligible que si **toutes** les conditions suivantes sont
@@ -578,7 +692,7 @@ Conséquences pratiques :
 - `OpenWorldOnly = 0` autorise aussi les instances, raids, BG et arènes, sous
   réserve des autres filtres ; ce réglage doit être réservé aux tests.
 - `OptInOnly = 0` élargit le module à toutes les créatures qui passent les autres
-  filtres. Ce n'est pas le mode recommandé en Phase 5.
+  filtres. Ce n'est pas le mode recommandé en Phase 6.
 - Cette politique ne s'applique qu'à l'initiateur d'une tactique. Les alliés
   retenus par `CanAssistTo` (appel à l'aide), comme destination de fuite, comme
   cible de soin ou comme soigneur protégé ne sont pas soumis à l'éligibilité du
@@ -629,8 +743,14 @@ Conséquences pratiques :
   `Addmod_combat_aiScripts()` et conserve les clés de configuration `CombatAI.*`.
 - Aucun patch du core n'est nécessaire ; aucune modification des autres modules.
 
-## Limites actuelles (Phase 5)
+## Limites actuelles (Phase 6)
 
+- Le benchmark Phase 6 se limite à 100 initiateurs/200 créatures sur la carte 0,
+  pendant 20 s, avec `CombatAI.Debug = 1` et sans joueur. Il ne couvre pas les
+  joueurs en solo, duo ou groupe, les instances au runtime, `.reload config` au
+  runtime, les durées de plusieurs minutes, le coût CPU en production, ni les
+  interactions réelles avec mod-hunts ou mod-living-world. La mesure
+  `avgDecisionUs` ne couvre que l'appel au moteur, sous Debug.
 - Un test de fumée local à trois créatures temporaires a validé l'engagement
   d'un allié par l'appel à l'aide et l'absence de seconde tentative sur cinq
   secondes (cooldowns créature et groupe actifs). Les tests joueurs
@@ -671,11 +791,13 @@ Conséquences pratiques :
   cours. Le protocole et le journal sont dans `docs/phase-5-test.md`.
 - Les scores (100, 60, 40, 30, pente de 2 par point de vie sous le seuil,
   multiplicateurs et variation ±10 %) sont des heuristiques de départ, non
-  réglées par une campagne d'équilibrage. Les tests joueurs solo/duo/groupe et
-  les tests de charge ne sont pas réalisés. Le coordinateur travaille par
-  fenêtre de 5 s et cellule de 40 yards, et le résumé de diagnostic est émis au
-  plus toutes les 60 s. Les compteurs `actions*` comptent des sélections, pas
-  nécessairement des créatures distinctes.
+  réglées par une campagne d'équilibrage. Les tests joueurs solo/duo/groupe ne
+  sont pas réalisés ; la charge n'est couverte que par le benchmark local de la
+  Phase 6 (200 créatures, 20 s, sous Debug), pas en conditions de production.
+  Le coordinateur travaille par fenêtre de 5 s et cellule de 40 yards, et le
+  résumé de diagnostic est émis au plus toutes les 60 s. Les compteurs
+  `actions*` comptent des sélections, pas nécessairement des créatures
+  distinctes.
 - La ligne de vue (`IsWithinLOSInMap()`) et le filtre de phase fourni par
   `CreatureWorker` sont utilisés et ont été exercés par les tests de fumée ; les
   cas complexes (obstacles, phases multiples) restent à valider en jeu.
