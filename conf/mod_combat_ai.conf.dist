@@ -1,0 +1,113 @@
+#######################################################################################################
+# mod-combat-ai
+#
+# Ce module ajoute une couche de décision de combat aux créatures éligibles.
+# La Phase 1 fournit le squelette du module : lecture de la configuration, calcul de l'éligibilité,
+# hooks de cycle de vie et journalisation. Aucune tactique de combat n'est encore exécutée.
+#
+# Le module est DÉSACTIVÉ par défaut. CombatAI.Enable = 0 laisse intégralement l'IA native du core
+# piloter les créatures : chaque hook retourne immédiatement, sans aucun travail.
+#######################################################################################################
+
+# ----------------------------------------------------------
+# Interrupteur principal
+# ----------------------------------------------------------
+# 0 = module inactif, IA native inchangée
+# 1 = module actif pour les créatures éligibles
+CombatAI.Enable = 0
+
+# ----------------------------------------------------------
+# Portée de l'éligibilité
+# ----------------------------------------------------------
+# 1 = seules les créatures humanoïdes sont éligibles
+# 0 = toutes les créatures peuvent l'être, sous réserve des autres filtres
+CombatAI.HumanoidsOnly = 1
+
+# 1 = uniquement les cartes ouvertes (monde extérieur)
+# 0 = aucune restriction de carte
+CombatAI.OpenWorldOnly = 1
+
+# 1 = opt-in strict : la créature doit figurer explicitement dans CombatAI.IncludeEntries
+# 0 = toutes les créatures éligibles sont concernées, sauf exclusions
+CombatAI.OptInOnly = 1
+
+# ----------------------------------------------------------
+# Listes d'inclusion / exclusion (CSV)
+# ----------------------------------------------------------
+# Listes d'identifiants séparés par des virgules ; les espaces autour de chaque valeur sont ignorés.
+# Les valeurs vides, non numériques ou hors plage sont ignorées.
+#
+# ATTENTION : avec OptInOnly = 1 et CombatAI.IncludeEntries vide, AUCUNE créature n'est affectée.
+#
+# Entrées de créature (creature entry) explicitement autorisées.
+CombatAI.IncludeEntries = ""
+
+# Entrées de créature toujours refusées ; l'exclusion est prioritaire sur l'inclusion.
+CombatAI.ExcludeEntries = ""
+
+# Cartes (mapId) autorisées ; une liste vide signifie « toutes les cartes ».
+CombatAI.IncludeMaps = ""
+
+# Cartes (mapId) toujours refusées ; l'exclusion est prioritaire sur l'inclusion.
+CombatAI.ExcludeMaps = ""
+
+# ----------------------------------------------------------
+# Cadence de décision
+# ----------------------------------------------------------
+# Intervalle minimal entre deux décisions d'une même créature, en millisecondes (doit être > 0).
+CombatAI.DecisionIntervalMs = 1000
+
+# Jitter aléatoire ajouté à l'intervalle, en millisecondes (0 = aucun jitter) pour lisser la charge.
+CombatAI.DecisionJitterMs = 250
+
+# ----------------------------------------------------------
+# Pondération de l'intelligence
+# ----------------------------------------------------------
+# Poids de la prise de décision individuelle, entre 0.0 et 1.0.
+CombatAI.IndividualIntelligence = 0.5
+
+# Poids de la coordination de groupe, entre 0.0 et 1.0.
+CombatAI.GroupIntelligence = 0.5
+
+# ----------------------------------------------------------
+# Appel à l'aide
+# ----------------------------------------------------------
+# 1 = la créature peut appeler des alliés proches pendant un combat
+CombatAI.CallForHelp.Enable = 1
+
+# Nombre maximal d'alliés appelés par décision (0 à 10).
+CombatAI.CallForHelp.MaxAllies = 2
+
+# Rayon de recherche des alliés, en mètres (doit être > 0).
+CombatAI.CallForHelp.Radius = 15
+
+# Délai minimal entre deux appels à l'aide, en millisecondes (0 = pas de délai).
+CombatAI.CallForHelp.CooldownMs = 30000
+
+# ----------------------------------------------------------
+# Retrait
+# ----------------------------------------------------------
+# 1 = la créature peut battre en retraite lorsque ses points de vie sont bas
+CombatAI.Retreat.Enable = 1
+
+# Seuil de points de vie, en pourcentage (1 à 100), qui déclenche le retrait.
+CombatAI.Retreat.HealthThresholdPct = 20
+
+# Délai minimal entre deux retraits, en millisecondes (0 = pas de délai).
+CombatAI.Retreat.CooldownMs = 60000
+
+# ----------------------------------------------------------
+# Protection d'allié
+# ----------------------------------------------------------
+# 1 = la créature peut intervenir pour défendre un allié attaqué
+CombatAI.ProtectAlly.Enable = 1
+
+# ----------------------------------------------------------
+# Charge et diagnostic
+# ----------------------------------------------------------
+# Nombre maximal de décisions évaluées par tick du monde (doit être > 0) ; borne le coût du module.
+CombatAI.MaxDecisionsPerTick = 64
+
+# 1 = journalisation de diagnostic détaillée (LOG_DEBUG, canal scripts.ai)
+# 0 = silencieux
+CombatAI.Debug = 0
