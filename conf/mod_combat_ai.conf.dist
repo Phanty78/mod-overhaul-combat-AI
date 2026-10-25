@@ -96,6 +96,9 @@ CombatAI.Retreat.HealthThresholdPct = 20
 # Délai minimal entre deux retraits, en millisecondes (0 = pas de délai).
 CombatAI.Retreat.CooldownMs = 60000
 
+# Rayon de recherche d'un allié destination, en mètres (doit être > 0).
+CombatAI.Retreat.Radius = 15
+
 # ----------------------------------------------------------
 # Protection d'allié
 # ----------------------------------------------------------

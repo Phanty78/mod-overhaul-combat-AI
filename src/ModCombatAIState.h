@@ -35,6 +35,11 @@ struct ModCombatAICounters
     uint64 callForHelpAlliesEngaged = 0;
     uint64 callForHelpGroupSkipped = 0;
     uint64 callForHelpNoAllies = 0;
+    uint64 retreatAttempts = 0;
+    uint64 retreatAllies = 0;
+    uint64 retreatFallbacks = 0;
+    uint64 retreatStuck = 0;
+    uint64 retreatCompleted = 0;
 };
 
 class ModCombatAIState

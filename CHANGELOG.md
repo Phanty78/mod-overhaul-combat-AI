@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.3.0 - 2026-10-25
+
+### Ajouté
+
+- Tactique de fuite bornée pour les créatures éligibles et opt-in : déclenchement
+  lorsque la vie est inférieure ou égale à `CombatAI.Retreat.HealthThresholdPct`
+  (défaut 20), que le cooldown de créature est échu, qu'une cible vivante existe
+  (victime ou cible de menace) et que la créature n'est pas déjà en
+  `UNIT_STATE_FLEEING`.
+- Scan d'un allié destination dans le rayon `CombatAI.Retreat.Radius` : ami,
+  vivant, hors evade, même carte, même zone, à portée et ligne de vue vers
+  l'initiateur ; l'allié le plus proche est retenu. L'allié n'a pas besoin d'être
+  éligible au module ni opt-in.
+- Déplacement vers l'allié via `MotionMaster::MovePoint` avec l'identifiant
+  unique `0x4D434149`, pour éviter les événements de point de SmartAI. Aucun
+  `MoveSeekAssistance`, aucun `SetCombatMovement` et aucun
+  `UNIT_STATE_NO_COMBAT_MOVEMENT`.
+- Repli `MoveFleeing(ennemi, 3000)` borné à 3 secondes lorsqu'aucun allié
+  qualifié n'est trouvé.
+- Watchdog du déplacement : suivi des générateurs `POINT_MOTION_TYPE`,
+  `FLEEING_MOTION_TYPE` et `TIMED_FLEEING_MOTION_TYPE` (actif et
+  `MOTION_SLOT_CONTROLLED`) ; progression de plus d'un yard rafraîchissant le
+  minuteur ; après 3 secondes sans progression, `MovementExpired()` et compteur
+  `retreatStuck` ; générateur terminé ou remplacé, compteur `retreatCompleted`.
+- Cooldown de fuite par créature (`CombatAI.Retreat.CooldownMs`, défaut 60000),
+  armé à chaque tentative réelle.
+- Priorité de la fuite sur l'appel à l'aide et au plus une action tactique par
+  décision : `TryRetreat` d'abord, `TryCallForHelp` seulement si la fuite n'a pas
+  consommé la décision.
+- Nouveaux compteurs : `retreatAttempts`, `retreatAllies`, `retreatFallbacks`,
+  `retreatStuck` et `retreatCompleted`.
+- Nouvelle clé `CombatAI.Retreat.Radius` (float, défaut 15, doit être `> 0`). Le
+  module compte 23 clés de configuration.
+- Diagnostics `scripts.ai` sous `CombatAI.Debug` : destination alliée retenue,
+  absence d'allié avec repli, expiration sans progression.
+
+### Notes
+
+- Test de fumée local à trois créatures temporaires : la créature à 10 % de vie
+  rejoint l'allié (distance 11 → 0), le point se termine (`completed=1`) avec une
+  seule tentative (`attempts=1`), sans blocage (`stuck=0`) ni repli
+  (`fallbacks=0`). `activeType=8` correspond à `POINT_MOTION_TYPE`, puis
+  `activeType=0` à `IDLE_MOTION_TYPE`. Les tests joueurs solo/duo/groupe, les
+  obstacles, le leash et l'evade, ainsi que les durées de plusieurs minutes et la
+  charge restent à valider ; le repli `MoveFleeing` n'a pas été exercé. Protocole
+  et résultat dans `docs/phase-3-test.md`.
+- L'IA native peut changer de cible et remplacer le point de déplacement ; le
+  watchdog traite alors la disparition du générateur comme une fin de fuite.
+- Aucune modification du core, aucune mise à jour SQL. Les 22 clés existantes
+  restent inchangées et `CombatAI.Retreat.Radius` s'ajoute.
+
 ## 0.2.0 - 2026-10-25
 
 ### Ajouté

@@ -57,6 +57,8 @@ void ModCombatAIConfig::BuildConfigCache()
     SetConfigValue<uint32>(ModCombatAIConfigKey::RetreatHealthThresholdPct, "CombatAI.Retreat.HealthThresholdPct", 20,
         ConfigValueCache::Reloadable::Yes, [](uint32 const& value) { return value >= 1 && value <= 100; }, "1 - 100");
     SetConfigValue<uint32>(ModCombatAIConfigKey::RetreatCooldownMs, "CombatAI.Retreat.CooldownMs", 60000);
+    SetConfigValue<float>(ModCombatAIConfigKey::RetreatRadius, "CombatAI.Retreat.Radius", 15.0f,
+        ConfigValueCache::Reloadable::Yes, [](float const& value) { return value > 0.0f; }, "> 0");
     SetConfigValue<bool>(ModCombatAIConfigKey::ProtectAllyEnable, "CombatAI.ProtectAlly.Enable", true);
     SetConfigValue<uint32>(ModCombatAIConfigKey::MaxDecisionsPerTick, "CombatAI.MaxDecisionsPerTick", 64,
         ConfigValueCache::Reloadable::Yes, [](uint32 const& value) { return value > 0; }, "> 0");

@@ -1,15 +1,18 @@
 # mod-combat-ai
 
-**État : Phase 2 — appel à l'aide borné (version 0.2.0). Le squelette de la
-Phase 1 reste la fondation.**
+**État : Phase 3 — fuite bornée (version 0.3.0). Les phases 1 et 2 restent la
+fondation.**
 
 Module AzerothCore pour WotLK 3.3.5a. Il ajoute une couche de décision de combat
 externe aux créatures, sans remplacer leur IA native. La Phase 1 a livré
 l'intégration : chargement du module, configuration, politique d'éligibilité, hooks
 de cycle de vie, limitation de charge et journalisation. La Phase 2 ajoute une
-seule tactique, l'appel à l'aide borné : une créature éligible et opt-in peut faire
-engager un nombre limité d'alliés proches, avec un cooldown par créature et un
-cooldown local de groupe. Aucune autre tactique n'est exécutée.
+première tactique, l'appel à l'aide borné : une créature éligible et opt-in peut
+faire engager un nombre limité d'alliés proches, avec un cooldown par créature et
+un cooldown local de groupe. La Phase 3 ajoute la fuite bornée : une créature
+éligible et opt-in dont la vie est inférieure ou égale au seuil rejoint l'allié le
+plus proche par un déplacement natif, ou fuit brièvement à défaut d'allié. Au plus
+une action tactique est exécutée par décision.
 
 Le module est **désactivé par défaut** (`CombatAI.Enable = 0`) et fonctionne en
 **opt-in strict** (`CombatAI.OptInOnly = 1`). Avec la configuration livrée, aucune
@@ -43,6 +46,11 @@ Le rapport d'audit et les limitations détaillées sont dans
    mod-combat-ai: disabled (call for help enabled)
    ```
 
+   Le premier jeton reflète `CombatAI.Enable`, le second
+   `CombatAI.CallForHelp.Enable`. Avec `CombatAI.Enable = 1` et
+   `CombatAI.CallForHelp.Enable = 0`, la ligne devient
+   `mod-combat-ai: enabled (call for help disabled)`.
+
 6. Pour activer le module, éditer `env/dist/etc/modules/mod_combat_ai.conf` :
 
    ```ini
@@ -56,12 +64,12 @@ Le rapport d'audit et les limitations détaillées sont dans
    les créatures éligibles de ces cartes : préférer `IncludeEntries` pour un
    déploiement progressif.
 
-Aucune mise à jour SQL n'est requise en Phase 2.
+Aucune mise à jour SQL n'est requise en Phase 3.
 
 ## Configuration
 
 Fichier : `env/dist/etc/modules/mod_combat_ai.conf` (`conf/mod_combat_ai.conf.dist`
-comme modèle). Les 22 clés sont rechargées par `.reload config` via
+comme modèle). Les 23 clés sont rechargées par `.reload config` via
 `WorldScript::OnAfterConfigLoad`.
 
 | Clé | Type | Défaut | Rôle et contrainte |
@@ -76,18 +84,19 @@ comme modèle). Les 22 clés sont rechargées par `.reload config` via
 | `CombatAI.ExcludeMaps` | string (CSV) | `""` | Cartes toujours refusées. L'exclusion est prioritaire sur l'inclusion. |
 | `CombatAI.DecisionIntervalMs` | uint32 | `1000` | Intervalle minimal entre deux décisions d'une même créature, en ms. Doit être `> 0`. |
 | `CombatAI.DecisionJitterMs` | uint32 | `250` | Jitter aléatoire ajouté à l'intervalle, en ms (`0` = aucun jitter), pour lisser la charge. |
-| `CombatAI.IndividualIntelligence` | float | `0.5` | Poids de décision individuelle, entre `0.0` et `1.0`. Stocké pour les phases ultérieures ; sans effet en Phase 2. |
-| `CombatAI.GroupIntelligence` | float | `0.5` | Poids de coordination de groupe, entre `0.0` et `1.0`. Stocké pour les phases ultérieures ; sans effet en Phase 2. |
+| `CombatAI.IndividualIntelligence` | float | `0.5` | Poids de décision individuelle, entre `0.0` et `1.0`. Stocké pour les phases ultérieures ; sans effet en Phase 3. |
+| `CombatAI.GroupIntelligence` | float | `0.5` | Poids de coordination de groupe, entre `0.0` et `1.0`. Stocké pour les phases ultérieures ; sans effet en Phase 3. |
 | `CombatAI.CallForHelp.Enable` | bool | `1` | Active la tactique d'appel à l'aide de la Phase 2. À `0`, aucune tentative d'appel n'est faite. |
 | `CombatAI.CallForHelp.MaxAllies` | uint32 | `2` | Plafond d'alliés engagés par appel, entre `0` et `10`. À `0`, la tactique est court-circuitée : aucun scan et aucun allié engagé. |
 | `CombatAI.CallForHelp.Radius` | float | `15` | Rayon de recherche des alliés, en mètres. Doit être `> 0`. Utilisé avec les contrôles de zone, de distance et de ligne de vue. |
 | `CombatAI.CallForHelp.CooldownMs` | uint32 | `30000` | Cooldown par créature entre deux appels, en ms (`0` = pas de délai). |
-| `CombatAI.Retreat.Enable` | bool | `1` | Option réservée à la Phase 3 ; aucune fuite n'est déclenchée en Phase 2. |
-| `CombatAI.Retreat.HealthThresholdPct` | uint32 | `20` | Seuil de vie en pourcentage, entre `1` et `100`. Stocké pour la Phase 3 ; sans effet en Phase 2. |
-| `CombatAI.Retreat.CooldownMs` | uint32 | `60000` | Cooldown de retrait en ms, stocké pour la Phase 3 ; sans effet en Phase 2. |
-| `CombatAI.ProtectAlly.Enable` | bool | `1` | Option réservée à la Phase 4 ; aucune protection n'est exécutée en Phase 2. |
+| `CombatAI.Retreat.Enable` | bool | `1` | Active la tactique de fuite de la Phase 3. À `0`, aucune fuite n'est déclenchée et le suivi d'un déplacement de fuite en cours est abandonné au tick suivant. |
+| `CombatAI.Retreat.HealthThresholdPct` | uint32 | `20` | Seuil de vie en pourcentage, entre `1` et `100`. La fuite peut se déclencher lorsque la vie de la créature est inférieure ou égale à ce seuil. |
+| `CombatAI.Retreat.CooldownMs` | uint32 | `60000` | Cooldown par créature entre deux tentatives de fuite, en ms (`0` = pas de délai). |
+| `CombatAI.Retreat.Radius` | float | `15` | Rayon de recherche de l'allié destination, en mètres. Doit être `> 0`. L'allié le plus proche dans ce rayon, visible et dans la même zone, sert de destination. |
+| `CombatAI.ProtectAlly.Enable` | bool | `1` | Option réservée à la Phase 4 ; aucune protection n'est exécutée en Phase 3. |
 | `CombatAI.MaxDecisionsPerTick` | uint32 | `64` | Budget global de décisions par tick du monde. Doit être `> 0`. Les décisions au-delà du budget sont différées. |
-| `CombatAI.Debug` | bool | `0` | Si `1`, journalise dans `scripts.ai` l'entrée en combat éligible, chaque décision évaluée et le résultat des tentatives d'appel à l'aide. |
+| `CombatAI.Debug` | bool | `0` | Si `1`, journalise dans `scripts.ai` l'entrée en combat éligible, chaque décision évaluée, le résultat des tentatives d'appel à l'aide et les diagnostics de fuite. |
 
 Les listes CSV ignorent les espaces autour des valeurs et les jetons vides, non
 numériques ou hors plage. Une valeur invalide pour une clé validée produit un
@@ -136,8 +145,8 @@ Une décision n'est évaluée que si l'intervalle `DecisionIntervalMs` (plus un 
 aléatoire dans `[0, DecisionJitterMs]`) est écoulé. Le budget
 `MaxDecisionsPerTick` est partagé par toutes les créatures pour un tick du monde :
 au-delà, la décision est comptée comme différée et retentée à l'intervalle suivant.
-Le budget s'applique avant la tactique : une décision différée ne tente aucun appel
-à l'aide.
+Le budget s'applique avant la tactique : une décision différée ne tente aucune
+tactique, fuite ou appel à l'aide.
 
 ### Journalisation et diagnostics
 
@@ -147,31 +156,40 @@ Le budget s'applique avant la tactique : une décision différée ne tente aucun
 - Avec `CombatAI.Debug = 1` : `LOG_DEBUG("scripts.ai", ...)` à l'entrée en combat
   d'une créature éligible et à chaque décision évaluée. La Phase 2 ajoute deux
   diagnostics d'appel : absence d'allié dans le rayon et résumé des alliés
-  effectivement engagés. Aucun journal n'est émis par allié.
+  effectivement engagés. La Phase 3 ajoute trois diagnostics de fuite :
+  destination alliée retenue, absence d'allié avec repli, et expiration du
+  déplacement faute de progression. Aucun journal n'est émis par allié.
 - Compteurs en mémoire : `decisionsEvaluated`, `skippedNotEligible`,
   `skippedBudget`, `contextsCreated`, `callForHelpAttempts`,
-  `callForHelpAlliesEngaged`, `callForHelpGroupSkipped`, `callForHelpNoAllies`.
-  `callForHelpAttempts` compte les scans réellement exécutés,
+  `callForHelpAlliesEngaged`, `callForHelpGroupSkipped`, `callForHelpNoAllies`,
+  `retreatAttempts`, `retreatAllies`, `retreatFallbacks`, `retreatStuck` et
+  `retreatCompleted`. `callForHelpAttempts` compte les scans réellement exécutés,
   `callForHelpAlliesEngaged` les alliés engagés, `callForHelpGroupSkipped` les
   tentatives bloquées par le cooldown de groupe et `callForHelpNoAllies` les scans
-  sans allié qualifié. Le module n'expose ni commande console ni export périodique
-  de ces compteurs.
+  sans allié qualifié. Côté fuite, `retreatAttempts` compte les tentatives
+  réellement exécutées, `retreatAllies` les fuites dirigées vers un allié,
+  `retreatFallbacks` les replis `MoveFleeing`, `retreatStuck` les déplacements
+  expirés après 3 s sans progression et `retreatCompleted` les déplacements
+  terminés ou remplacés. Le module n'expose ni commande console ni export
+  périodique de ces compteurs.
 
-### Ce qui n'est pas fait en Phase 2
+### Ce qui n'est pas fait en Phase 3
 
-La Phase 2 n'implémente que l'appel à l'aide. Le module ne change pas la cible de
-l'initiateur, ne lance aucun sort, ne déplace pas la créature et n'appelle ni
-`MoveFleeing` ni `MovePoint`. Il n'ajoute de menace que par l'engagement natif des
-alliés via `EngageWithTarget`. La fuite, la protection d'allié et le
-repositionnement restent des phases ultérieures, tout comme le moteur de décision
-fondé sur `IndividualIntelligence` et `GroupIntelligence`. Les clés `Retreat.*`,
+La Phase 3 implémente l'appel à l'aide et la fuite. Le module ne change pas la
+cible de l'initiateur et ne lance aucun sort. Il n'ajoute de menace que par
+l'engagement natif des alliés via `EngageWithTarget`. La fuite déplace la
+créature avec les générateurs natifs `MovePoint` (vers un allié) et `MoveFleeing`
+(repli sans allié), sans remplacer son IA. La protection d'allié, le
+repositionnement et le moteur de décision fondé sur `IndividualIntelligence` et
+`GroupIntelligence` restent des phases ultérieures. Les clés
 `ProtectAlly.Enable`, `IndividualIntelligence` et `GroupIntelligence` sont lues et
 conservées pour ces phases.
 
 ## Phase 2 — appel à l'aide
 
-La Phase 2 ajoute une unique tactique. Au plus une action tactique est exécutée par
-décision.
+La Phase 2 ajoute une première tactique. Au plus une action tactique est exécutée
+par décision, et la fuite de la Phase 3 est prioritaire sur l'appel à l'aide (voir
+la section Phase 3).
 
 ### Déclenchement
 
@@ -213,6 +231,78 @@ décision.
 - Aucun sort, aucun changement de cible de l'initiateur et aucun déplacement ne
   sont effectués. L'appel se limite à l'engagement natif des alliés.
 
+## Phase 3 — fuite
+
+La Phase 3 ajoute la fuite bornée. Elle est évaluée en premier et consomme la
+décision lorsqu'elle démarre ou lorsqu'un déplacement de fuite est encore actif.
+
+### Déclenchement
+
+- L'initiateur doit être éligible et opt-in, en combat et vivant.
+- `CombatAI.Retreat.Enable = 1`.
+- Sa vie doit être inférieure ou égale à `CombatAI.Retreat.HealthThresholdPct`.
+- Le cooldown de créature (`retreatCooldownEnd`, alimenté par
+  `CombatAI.Retreat.CooldownMs`) doit être échu.
+- Une cible réelle vivante doit exister : victime (`GetVictim()`), à défaut
+  cible de menace courante, à défaut n'importe quelle cible de menace.
+- La créature ne doit pas déjà porter `UNIT_STATE_FLEEING`.
+- Le budget `CombatAI.MaxDecisionsPerTick` s'applique en amont ; une décision
+  refusée par le budget ne consomme pas de tentative de fuite.
+
+### Destination alliée
+
+- Scan local via `Cell::VisitObjects` autour de l'initiateur, dans
+  `CombatAI.Retreat.Radius`.
+- Chaque candidat doit être ami de l'initiateur (`IsFriendlyTo`), vivant, hors
+  evade, sur la même carte, dans la même zone (`GetZoneId()`), à portée et voir
+  l'initiateur (`IsWithinLOSInMap(initiateur)`). Le filtre `CreatureWorker`
+  impose déjà la même phase.
+- L'allié le plus proche (`GetDistance`) est retenu. **Il n'a pas besoin d'être
+  éligible au module ni opt-in.**
+- La destination est l'allié lui-même : `MotionMaster::MovePoint` aux coordonnées
+  de l'allié, avec l'identifiant unique `0x4D434149`. Cet identifiant évite de
+  collisionner avec les identifiants de points utilisés par les événements
+  SmartAI.
+- Aucun `MoveSeekAssistance`, aucun `SetCombatMovement` et aucun
+  `UNIT_STATE_NO_COMBAT_MOVEMENT` : la fuite n'ajoute pas les effets de bord de
+  `MoveSeekAssistance` (arrêt d'attaque, arrêt de sort, passage en
+  `REACT_PASSIVE`) et ne fige pas le mouvement de combat.
+
+### Repli sans allié
+
+- Sans allié qualifié, la créature exécute `MoveFleeing(ennemi, 3000)` : fuite
+  native bornée à 3 secondes.
+- Le cooldown de créature est armé après l'ordre de mouvement, dans les deux
+  branches.
+- `retreatAttempts` est incrémenté pour chaque tentative réelle ; `retreatAllies`
+  pour une destination alliée et `retreatFallbacks` pour le repli.
+
+### Surveillance du déplacement
+
+- `moduleMoving` marque une fuite active ; le contexte mémorise la position de
+  référence et l'horodatage de progression.
+- Le watchdog examine le générateur actif et l'emplacement
+  `MOTION_SLOT_CONTROLLED` : `POINT_MOTION_TYPE`, `FLEEING_MOTION_TYPE` ou
+  `TIMED_FLEEING_MOTION_TYPE` signalent une fuite en cours.
+- Un déplacement de plus d'un yard par rapport à la dernière position de
+  référence rafraîchit l'horodatage de progression.
+- Après 3 secondes sans progression, `MovementExpired()` est appelée,
+  `moduleMoving` retombe à `false` et `retreatStuck` est incrémenté.
+- Si le générateur disparaît (fin, remplacement par l'IA native), `moduleMoving`
+  retombe à `false` et `retreatCompleted` est incrémenté.
+- Tant que `moduleMoving` est vrai, la fuite consomme la décision : aucune
+  nouvelle fuite et aucun appel à l'aide ne sont tentés.
+
+### Priorité et cooldown
+
+- `TryRetreat` est évaluée avant `TryCallForHelp`. L'appel à l'aide n'est tenté
+  que si la fuite n'a pas consommé la décision.
+- Le cooldown de fuite est propre à la créature et n'est pas partagé entre
+  créatures.
+- `CombatAI.Retreat.Enable = 0` désactive la tactique ; le suivi d'un
+  déplacement de fuite déjà en cours est abandonné (`moduleMoving = false`) au
+  tick suivant, sans expiration forcée du générateur.
+
 ## Éligibilité et exclusions
 
 Une créature n'est éligible que si **toutes** les conditions suivantes sont
@@ -240,10 +330,11 @@ Conséquences pratiques :
 - `OpenWorldOnly = 0` autorise aussi les instances, raids, BG et arènes, sous
   réserve des autres filtres ; ce réglage doit être réservé aux tests.
 - `OptInOnly = 0` élargit le module à toutes les créatures qui passent les autres
-  filtres. Ce n'est pas le mode recommandé en Phase 2.
-- Cette politique ne s'applique qu'à l'initiateur d'un appel à l'aide. Les alliés
-  retenus par `CanAssistTo` ne sont pas soumis à l'éligibilité du module ni à
-  l'opt-in (voir la section Phase 2).
+  filtres. Ce n'est pas le mode recommandé en Phase 3.
+- Cette politique ne s'applique qu'à l'initiateur d'une tactique. Les alliés
+  retenus par `CanAssistTo` (appel à l'aide) ou comme destination de fuite ne
+  sont pas soumis à l'éligibilité du module ni à l'opt-in (voir les sections
+  Phase 2 et Phase 3).
 
 ## Compatibilité
 
@@ -252,8 +343,11 @@ Conséquences pratiques :
   hooks additifs : l'IA native continue de tourner et peut ignorer ou écraser de
   futurs ordres.
 - **SmartAI n'est pas remplacé.** Ses actions natives d'appel à l'aide ou de fuite
-  restent actives ; la Phase 2 ajoute uniquement l'appel borné décrit ci-dessus,
-  sans désactiver ces actions.
+  restent actives ; les phases 2 et 3 ajoutent l'appel borné et la fuite décrits
+  ci-dessus, sans désactiver ces actions.
+- **Mouvement natif.** La fuite utilise `MovePoint` et `MoveFleeing` du core et ne
+  remplace pas l'IA : celle-ci peut terminer ou remplacer le déplacement, ce que
+  le watchdog traite comme une fin de fuite.
 - **mod-hunts.** Ses proies d'élite et ses summons peuvent avoir un `ScriptName`
   vide, et certains summons n'ont pas d'`AIName` : l'exclusion par `ScriptName` ne
   suffit donc pas. Ce module écrit lui-même mouvement et engagement. Tant que
@@ -269,21 +363,31 @@ Conséquences pratiques :
   `Addmod_combat_aiScripts()` et conserve les clés de configuration `CombatAI.*`.
 - Aucun patch du core n'est nécessaire ; aucune modification des autres modules.
 
-## Limites actuelles (Phase 2)
+## Limites actuelles (Phase 3)
 
 - Un test de fumée local à trois créatures temporaires a validé l'engagement
-  d'un allié et l'absence de seconde tentative sur cinq secondes (cooldowns
-  créature et groupe actifs). Les tests joueurs solo/duo/groupe, le plafond
-  multi-alliés et la charge ne sont pas encore validés en conditions réelles.
-  Le protocole et le résultat sont dans `docs/phase-2-test.md`.
-- La Phase 2 n'exécute qu'une tactique. La fuite, la protection d'allié, le
-  repositionnement et le moteur de décision restent à implémenter ; les clés
-  correspondantes sont présentes mais inertes.
+  d'un allié par l'appel à l'aide et l'absence de seconde tentative sur cinq
+  secondes (cooldowns créature et groupe actifs). Les tests joueurs
+  solo/duo/groupe, le plafond multi-alliés et la charge ne sont pas encore
+  validés en conditions réelles. Le protocole et le résultat sont dans
+  `docs/phase-2-test.md`.
+- Un second test de fumée local a validé la fuite vers un allié : la créature
+  rejoint l'allié (distance 11 → 0), le point se termine (`retreatCompleted = 1`)
+  avec une seule tentative (`retreatAttempts = 1`) résolue par un allié
+  (`retreatAllies = 1`) et sans blocage (`retreatStuck = 0`) ni repli
+  (`retreatFallbacks = 0`). Les tests joueurs solo/duo/groupe, les obstacles, le
+  leash et l'evade, ainsi que les durées de plusieurs minutes et la charge ne
+  sont pas validés ; le repli `MoveFleeing` n'a pas été exercé. Le protocole et
+  le résultat sont dans `docs/phase-3-test.md`.
+- La Phase 3 exécute deux tactiques. La protection d'allié, le repositionnement
+  et le moteur de décision restent à implémenter ; `ProtectAlly.Enable`,
+  `IndividualIntelligence` et `GroupIntelligence` sont présentes mais inertes.
 - La ligne de vue (`IsWithinLOSInMap()`) et le filtre de phase fourni par
-  `CreatureWorker` sont utilisés et ont été exercés par le test de fumée ; les
+  `CreatureWorker` sont utilisés et ont été exercés par les tests de fumée ; les
   cas complexes (obstacles, phases multiples) restent à valider en jeu.
-- Le cooldown de groupe est local et approximatif : il est indexé par `mapId` et
-  par cellule de 40 yards, sans tenir compte de la composition réelle du groupe.
+- Le cooldown de groupe de l'appel à l'aide est local et approximatif : il est
+  indexé par `mapId` et par cellule de 40 yards, sans tenir compte de la
+  composition réelle du groupe.
 - Les alliés ne sont pas tenus d'être éligibles au module ni d'être opt-in ; seul
   l'initiateur l'est. Un allié peut donc être une créature que le module ne
   piloterait jamais par ailleurs.
@@ -293,13 +397,17 @@ Conséquences pratiques :
 - Les compteurs sont en mémoire uniquement. Un `.reload config` ne les remet pas
   à zéro : seuls les contextes, les cooldowns de groupe et le budget du tick sont
   réinitialisés.
-- Aucun chemin de code ne modifie les statistiques, les sorts ou le mouvement des
-  créatures. La seule modification de menace provient de l'engagement natif des
-  alliés par `EngageWithTarget`.
+- Aucun chemin de code ne modifie les statistiques, les sorts ou la cible. Les
+  seules modifications de mouvement proviennent de `MovePoint` et `MoveFleeing`
+  pendant une fuite ; la seule modification de menace provient de l'engagement
+  natif des alliés par `EngageWithTarget`.
 - L'IA native des alliés reste maîtresse de leur comportement : elle peut changer
   de cible ou ignorer l'engagement demandé.
-- Un rayon `CallForHelp.Radius` élevé augmente le coût du scan effectué à chaque
-  tentative d'appel.
+- Pendant une fuite, l'IA native de l'initiateur peut changer de cible ou
+  remplacer le point de déplacement ; le watchdog détecte la disparition du
+  générateur et libère `moduleMoving`.
+- Un rayon `CallForHelp.Radius` ou `Retreat.Radius` élevé augmente le coût du
+  scan effectué à chaque tentative.
 
 ## Build
 
