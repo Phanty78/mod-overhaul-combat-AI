@@ -49,7 +49,7 @@
   Les tests joueurs solo/duo/groupe, les immunités, les contrôles de foule, les
   compositions de menace, plusieurs soigneurs simultanés, les obstacles, les
   durées de plusieurs minutes et la charge ne sont pas validés ; les constantes
-  sont fixes. Protocole et journal dans `docs/phase-4-test.md`.
+  sont fixées dans le code. Protocole et journal dans `docs/phase-4-test.md`.
 - Aucune modification du core, aucune mise à jour SQL. Aucune clé de
   configuration ajoutée ou supprimée.
 

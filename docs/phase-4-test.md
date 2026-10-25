@@ -140,6 +140,7 @@ COMBATAI P4 SMOKE T+7s: allyHealth=100 meleeType=0 meleeDistHealer=0 attempts=2 
 - Les durées de plusieurs minutes, la charge avec des dizaines ou des centaines
   de créatures, et les changements de phase ou de carte.
 - La sensibilité des constantes : le rayon de 20 yards, les seuils de 80 % et
-  60 %, et les cooldowns de 1 s et 5 s sont fixes et n'ont pas été variés.
+  60 %, et les cooldowns de 1 s et 5 s sont fixés dans le code et n'ont pas été
+  variés.
 - Le comportement lorsque `CombatAI.ProtectAlly.Enable = 0` ; le test ne couvre
   que la valeur `1`.

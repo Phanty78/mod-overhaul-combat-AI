@@ -343,8 +343,9 @@ s'applique en amont.
 
 ### Branche soigneur
 
-- Est considérée soigneur une créature dont `m_spells` contient au moins un sort
-  avec `SPELL_EFFECT_HEAL` et `IsPositive()`. Aucun autre sort n'est utilisé.
+- Est considérée soigneur une créature dont la liste publique `m_spells`
+  contient au moins un sort avec `SPELL_EFFECT_HEAL` et `IsPositive()`. Aucun
+  autre sort n'est utilisé.
 - Scan local via `Cell::VisitObjects` dans un rayon fixe de 20 yards. Chaque
   candidat doit être vivant, ami, différent du soigneur, sur la même carte et
   dans la même zone (`GetZoneId()`), à portée, visible
@@ -513,8 +514,8 @@ Conséquences pratiques :
   au module. Les tests joueurs solo/duo/groupe, les immunités, les contrôles de
   foule, les compositions de menace, plusieurs soigneurs simultanés, les
   obstacles, les durées de plusieurs minutes et la charge ne sont pas validés ;
-  les constantes (20 yards, 80 %, 60 %, 1 s, 5 s) sont fixes. Le protocole et le
-  journal sont dans `docs/phase-4-test.md`.
+  les constantes (20 yards, 80 %, 60 %, 1 s, 5 s) sont fixées dans le code. Le
+  protocole et le journal sont dans `docs/phase-4-test.md`.
 - La Phase 4 exécute trois tactiques. Le repositionnement et le moteur de
   décision restent à implémenter ; `IndividualIntelligence` et
   `GroupIntelligence` sont présentes mais inertes.
