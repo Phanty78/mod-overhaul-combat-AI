@@ -1,0 +1,50 @@
+name: core-build
+on:
+  push:
+    branches:
+      - 'master'
+      - 'main'
+  pull_request:
+    branches:
+      - 'master'
+      - 'main'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    name: ubuntu-26.04-clang-20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'azerothcore/azerothcore-wotlk'
+          ref: 'master'
+          submodules: 'recursive'
+
+      # The module must live in modules/mod-combat-ai: the core derives the
+      # Addmod_combat_aiScripts() loader symbol from the folder name, not from
+      # the repository name.
+      - name: Checkout module into modules/mod-combat-ai
+        uses: actions/checkout@v4
+        with:
+          path: 'modules/mod-combat-ai'
+
+      - uses: actions/checkout@v4
+        with:
+          repository: 'azerothcore/reusable-workflows'
+          path: 'reusable-workflows'
+
+      - uses: ./.github/actions/linux-build
+        with:
+          CC: clang-20
+          CXX: clang++-20
+
+      - name: cpp check
+        run: |
+          sudo apt update -y
+          sudo apt install -y cppcheck
+          cppcheck --force --inline-suppr --suppressions-list=reusable-workflows/cppchecksuppressions.txt --output-file=report.txt modules/
+          if [ -s report.txt ]; then
+            cat report.txt
+            exit 1
+          fi

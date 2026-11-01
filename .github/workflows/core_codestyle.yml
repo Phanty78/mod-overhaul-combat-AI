@@ -1,0 +1,11 @@
+name: Codestyle Checks
+on:
+  push:
+    branches:
+      - 'master'
+      - 'main'
+  pull_request:
+
+jobs:
+  codestyle:
+    uses: azerothcore/reusable-workflows/.github/workflows/codestyle_modules.yml@main
