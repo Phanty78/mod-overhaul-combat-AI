@@ -78,7 +78,7 @@ void ModCombatAICreatureScript::OnAllCreatureUpdate(Creature* creature, uint32 d
     if (g_ModCombatAIConfig.Debug())
     {
         LOG_DEBUG("scripts.ai", "mod-combat-ai: decision evaluated for creature entry {} guid {} map {}",
-            creature->GetEntry(), creature->GetGUID().GetCounter(), creature->GetMapId());
+            creature->GetEntry(), creature->GetGUID().ToString().c_str(), creature->GetMapId());
     }
 }
 

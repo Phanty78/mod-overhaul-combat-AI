@@ -31,7 +31,7 @@ void ModCombatAIUnitScript::OnUnitEnterCombat(Unit* unit, Unit* victim)
 
     if (eligible && g_ModCombatAIConfig.Debug())
     {
-        LOG_DEBUG("scripts.ai", "mod-combat-ai: creature entry {} guid {} entered combat (eligible)", creature->GetEntry(), creature->GetGUID().GetCounter());
+        LOG_DEBUG("scripts.ai", "mod-combat-ai: creature entry {} guid {} entered combat (eligible)", creature->GetEntry(), creature->GetGUID().ToString().c_str());
     }
 }
 

@@ -171,7 +171,7 @@ bool ModCombatAIDecisionEngine::Decide(Creature* creature, ModCombatAIContext& c
         if (config.Debug())
         {
             LOG_DEBUG("scripts.ai", "mod-combat-ai: creature entry {} guid {} selected {} (score {:.2f})",
-                creature->GetEntry(), creature->GetGUID().GetCounter(), TacticName(candidate.tactic), candidate.score);
+                creature->GetEntry(), creature->GetGUID().ToString().c_str(), TacticName(candidate.tactic), candidate.score);
         }
 
         return true;

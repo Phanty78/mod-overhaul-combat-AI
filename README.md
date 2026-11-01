@@ -1,5 +1,9 @@
 # mod-combat-ai
 
+[![core-build](https://github.com/Phanty78/mod-overhaul-combat-AI/actions/workflows/core-build.yml/badge.svg?branch=main)](https://github.com/Phanty78/mod-overhaul-combat-AI/actions/workflows/core-build.yml)
+[![Codestyle Checks](https://github.com/Phanty78/mod-overhaul-combat-AI/actions/workflows/core_codestyle.yml/badge.svg?branch=main)](https://github.com/Phanty78/mod-overhaul-combat-AI/actions/workflows/core_codestyle.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **État : Phase 6 — généralisation (version 1.0.0). Les phases 1 à 5 restent la
 fondation.**
 
@@ -35,7 +39,14 @@ Le rapport d'audit et les limitations détaillées sont dans
 ## Installation
 
 1. Placer le module dans `modules/mod-combat-ai/`. Le dossier `src/` doit exister :
-   c'est lui qui rend le module visible pour CMake.
+   c'est lui qui rend le module visible pour CMake. Le nom du dossier détermine le
+   symbole `Addmod_combat_aiScripts()` attendu par le core : cloner le dépôt sous
+   ce nom, pas sous le nom du dépôt.
+
+   ```sh
+   git clone https://github.com/Phanty78/mod-overhaul-combat-AI.git \
+     modules/mod-combat-ai
+   ```
 2. Reconfigurer CMake, opération obligatoire. Les sources des modules sont
    collectées par glob au moment du configure ; un simple build ne détecte pas un
    module ou un fichier source ajouté après la dernière configuration. Aucun
