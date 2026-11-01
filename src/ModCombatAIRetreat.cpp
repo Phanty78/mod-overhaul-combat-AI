@@ -107,7 +107,7 @@ namespace
             if (g_ModCombatAIConfig.Debug())
             {
                 LOG_DEBUG("scripts.ai", "mod-combat-ai: retreat entry {} guid {} made no progress, expiring movement",
-                    creature->GetEntry(), creature->GetGUID().GetCounter());
+                    creature->GetEntry(), creature->GetGUID().ToString().c_str());
             }
         }
 
@@ -163,8 +163,8 @@ bool mod_combat_ai::TryRetreat(Creature* creature, ModCombatAIContext& context, 
         if (g_ModCombatAIConfig.Debug())
         {
             LOG_DEBUG("scripts.ai", "mod-combat-ai: retreat entry {} guid {} moving to ally entry {} guid {}",
-                creature->GetEntry(), creature->GetGUID().GetCounter(),
-                ally->GetEntry(), ally->GetGUID().GetCounter());
+                creature->GetEntry(), creature->GetGUID().ToString().c_str(),
+                ally->GetEntry(), ally->GetGUID().ToString().c_str());
         }
     }
     else
@@ -175,7 +175,7 @@ bool mod_combat_ai::TryRetreat(Creature* creature, ModCombatAIContext& context, 
         if (g_ModCombatAIConfig.Debug())
         {
             LOG_DEBUG("scripts.ai", "mod-combat-ai: retreat entry {} guid {} has no ally within {} yards, fleeing for {} ms",
-                creature->GetEntry(), creature->GetGUID().GetCounter(), radius, RetreatFallbackFleeMs);
+                creature->GetEntry(), creature->GetGUID().ToString().c_str(), radius, RetreatFallbackFleeMs);
         }
     }
 

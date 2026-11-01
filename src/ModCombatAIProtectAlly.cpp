@@ -242,8 +242,8 @@ bool mod_combat_ai::TryProtectAlly(Creature* creature, ModCombatAIContext& conte
             if (g_ModCombatAIConfig.Debug())
             {
                 LOG_DEBUG("scripts.ai", "mod-combat-ai: protect entry {} guid {} healing ally entry {} guid {} with spell {}",
-                    creature->GetEntry(), creature->GetGUID().GetCounter(),
-                    ally->GetEntry(), ally->GetGUID().GetCounter(), spellId);
+                    creature->GetEntry(), creature->GetGUID().ToString().c_str(),
+                    ally->GetEntry(), ally->GetGUID().ToString().c_str(), spellId);
             }
 
             return true;
@@ -298,9 +298,9 @@ bool mod_combat_ai::TryProtectAlly(Creature* creature, ModCombatAIContext& conte
     if (g_ModCombatAIConfig.Debug())
     {
         LOG_DEBUG("scripts.ai", "mod-combat-ai: protect entry {} guid {} intercepting attacker entry {} guid {} for healer entry {} guid {}",
-            creature->GetEntry(), creature->GetGUID().GetCounter(),
-            attacker->GetEntry(), attacker->GetGUID().GetCounter(),
-            healer->GetEntry(), healer->GetGUID().GetCounter());
+            creature->GetEntry(), creature->GetGUID().ToString().c_str(),
+            attacker->GetEntry(), attacker->GetGUID().ToString().c_str(),
+            healer->GetEntry(), healer->GetGUID().ToString().c_str());
     }
 
     return true;

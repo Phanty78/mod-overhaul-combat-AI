@@ -104,8 +104,8 @@ bool mod_combat_ai::TryReposition(Creature* creature, ModCombatAIContext& contex
     if (g_ModCombatAIConfig.Debug())
     {
         LOG_DEBUG("scripts.ai", "mod-combat-ai: reposition entry {} guid {} backing away from victim entry {} guid {} at distance {:.2f} toward ({:.2f}, {:.2f}, {:.2f})",
-            creature->GetEntry(), creature->GetGUID().GetCounter(),
-            victim->GetEntry(), victim->GetGUID().GetCounter(), distance,
+            creature->GetEntry(), creature->GetGUID().ToString().c_str(),
+            victim->GetEntry(), victim->GetGUID().ToString().c_str(), distance,
             destX, destY, destZ);
     }
 
